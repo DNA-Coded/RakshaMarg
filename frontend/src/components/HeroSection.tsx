@@ -138,7 +138,7 @@ const HeroSection = () => {
         transition={{ delay: 1.5, duration: 1 }}
         className="absolute bottom-24 right-8 md:right-20 z-30 hidden lg:flex flex-col gap-6"
       >
-        {/* 1. Verified Personnel Card */}
+        {/* 1. Secured Personnel Card */}
         <div className="bg-white/5 border border-white/10 p-6 rounded-3xl w-72 backdrop-blur-2xl border-l-4 border-l-brand-purple">
           <div className="flex items-center gap-4 mb-4">
              <div className="relative w-12 h-12 flex items-center justify-center">
@@ -156,7 +156,8 @@ const HeroSection = () => {
                 </AnimatePresence>
              </div>
              <div>
-                <div className="text-xl font-bold text-white">Verified</div>
+                {/* CHANGED: Verified -> Secured */}
+                <div className="text-xl font-bold text-white">Secured</div>
                 <div className="text-xs text-white/50 uppercase tracking-wider">Active Personnel</div>
              </div>
           </div>
