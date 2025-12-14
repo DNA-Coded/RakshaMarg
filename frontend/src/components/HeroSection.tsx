@@ -1,14 +1,24 @@
 import React from 'react';
 import { Shield, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import AnimatedBackground from './AnimatedBackground';
 import { Link } from 'react-router-dom';
+// Import the image from the src folder (adjust path if needed)
+import mapBg from '../map.jpeg'; 
 
 const HeroSection = () => {
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      <AnimatedBackground />
-      
+    <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
+      {/* Background Image */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src={mapBg} 
+          alt="Map background" 
+          className="w-full h-full object-cover opacity-20" 
+        />
+        {/* Optional overlay for better text readability */}
+        <div className="absolute inset-0 bg-background/60"></div>
+      </div>
+
       <div className="container relative z-10 px-4 py-20">
         <div className="max-w-4xl mx-auto text-center">
           {/* Logo/Shield */}
