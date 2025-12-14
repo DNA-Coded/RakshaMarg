@@ -5,19 +5,32 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-soft hover:shadow-card",
+        // Default: Third Color (Slate) -> Hover: Fourth Color (Navy)
+        default: "bg-brand-slate text-brand-light hover:bg-brand-navy shadow-md hover:shadow-lg",
+        
         destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
-        outline: "border-2 border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground",
-        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
-        hero: "bg-gradient-to-r from-coral to-coral-light text-accent-foreground font-semibold shadow-elevated hover:shadow-glow hover:scale-105 active:scale-100",
-        teal: "bg-secondary text-secondary-foreground font-semibold shadow-soft hover:shadow-card hover:bg-teal-light",
-        navy: "bg-navy text-primary-foreground font-semibold shadow-soft hover:shadow-card hover:bg-navy-dark",
+        
+        // Outline: Border Slate, Text Slate -> Hover: Fill Slate
+        outline: "border-2 border-brand-slate bg-transparent text-brand-slate hover:bg-brand-slate hover:text-brand-light",
+        
+        // Secondary: Second Color (Teal) -> Text Navy
+        secondary: "bg-brand-teal text-brand-navy hover:bg-brand-teal/80 font-semibold",
+        
+        ghost: "hover:bg-brand-slate/10 hover:text-brand-slate",
+        link: "text-brand-slate underline-offset-4 hover:underline",
+        
+        // Hero: Gradient Slate to Navy -> Text Light
+        hero: "bg-gradient-to-r from-brand-slate to-brand-navy text-brand-light font-bold shadow-lg hover:shadow-xl hover:scale-105 active:scale-100",
+        
+        // Teal Variant (Explicit): Teal bg -> Navy text
+        teal: "bg-brand-teal text-brand-navy font-semibold shadow-md hover:bg-brand-teal/90",
+        
+        // Navy Variant: Navy bg -> Light text
+        navy: "bg-brand-navy text-brand-light font-semibold shadow-md hover:bg-brand-navy/90",
       },
       size: {
         default: "h-10 px-4 py-2",

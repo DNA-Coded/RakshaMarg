@@ -41,36 +41,37 @@ const CheckRoute = () => {
   return (
     <>
       <Helmet>
-        <title>Check Route Safety | RakshaMarg - Women Safety Route Awareness</title>
-        <meta name="description" content="Check the safety of your travel route before you go. Enter your start and destination to get safety awareness information." />
+        <title>Check Route Safety | RakshaMarg</title>
+        <meta name="description" content="Check the safety of your travel route before you go." />
       </Helmet>
 
-      <div className="min-h-screen bg-background flex flex-col">
+      {/* Main Page Background: First Color (Light) */}
+      <div className="min-h-screen bg-brand-first flex flex-col">
         <Navbar />
         
         <main className="flex-1 pt-20 md:pt-24">
           {/* Hero Section */}
-          <section className="py-12 gradient-hero">
+          <section className="py-12">
             <div className="container px-4">
               <div className="max-w-3xl mx-auto text-center mb-10">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-secondary/10 rounded-2xl mb-6">
-                  <Shield className="w-8 h-8 text-secondary" />
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-teal/20 rounded-2xl mb-6">
+                  <Shield className="w-8 h-8 text-brand-navy" />
                 </div>
-                <h1 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
+                <h1 className="font-display text-3xl md:text-4xl font-bold text-brand-navy mb-4">
                   Check Your Route Safety
                 </h1>
-                <p className="text-lg text-muted-foreground">
+                <p className="text-lg text-brand-slate">
                   Enter your starting point and destination to get safety awareness information for your journey.
                 </p>
               </div>
 
-              {/* Route Input Card */}
+              {/* Route Input Card - White Background to pop against First Color */}
               <div className="max-w-2xl mx-auto">
-                <div className="bg-card rounded-2xl shadow-elevated p-6 md:p-8">
+                <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-brand-slate/10">
                   <div className="space-y-4">
                     {/* From Input */}
                     <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondary">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-slate">
                         <MapPin className="w-5 h-5" />
                       </div>
                       <Input
@@ -78,18 +79,19 @@ const CheckRoute = () => {
                         placeholder="Enter starting location"
                         value={fromLocation}
                         onChange={(e) => setFromLocation(e.target.value)}
-                        className="pl-12 h-14 text-base bg-muted/50 border-0 focus-visible:ring-2 focus-visible:ring-secondary"
+                        // Explicitly white background, Slate border
+                        className="pl-12 h-14 text-base bg-white border-brand-slate/30 focus-visible:ring-2 focus-visible:ring-brand-teal"
                       />
                     </div>
 
                     {/* Connector */}
                     <div className="flex items-center justify-center">
-                      <div className="w-0.5 h-6 bg-border rounded-full" />
+                      <div className="w-0.5 h-6 bg-brand-slate/30 rounded-full" />
                     </div>
 
                     {/* To Input */}
                     <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-coral">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-teal">
                         <Navigation className="w-5 h-5" />
                       </div>
                       <Input
@@ -97,11 +99,11 @@ const CheckRoute = () => {
                         placeholder="Enter destination"
                         value={toLocation}
                         onChange={(e) => setToLocation(e.target.value)}
-                        className="pl-12 h-14 text-base bg-muted/50 border-0 focus-visible:ring-2 focus-visible:ring-coral"
+                        className="pl-12 h-14 text-base bg-white border-brand-slate/30 focus-visible:ring-2 focus-visible:ring-brand-teal"
                       />
                     </div>
 
-                    {/* Button */}
+                    {/* Button using Hero Variant */}
                     <Button 
                       variant="hero" 
                       size="xl" 
@@ -111,7 +113,7 @@ const CheckRoute = () => {
                     >
                       {isAnalyzing ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                          <div className="w-5 h-5 border-2 border-brand-light/30 border-t-brand-light rounded-full animate-spin" />
                           Analyzing Route...
                         </>
                       ) : (
@@ -133,46 +135,36 @@ const CheckRoute = () => {
               <div className="container px-4">
                 <div className="max-w-4xl mx-auto">
                   <div className="grid lg:grid-cols-5 gap-6">
-                    {/* Route Preview */}
-                    <div className="lg:col-span-3 bg-card rounded-2xl shadow-card overflow-hidden">
-                      <div className="p-6 border-b border-border">
-                        <h2 className="font-display text-xl font-semibold text-foreground flex items-center gap-2">
-                          <MapPin className="w-5 h-5 text-secondary" />
+                    {/* Route Preview Card */}
+                    <div className="lg:col-span-3 bg-white rounded-2xl shadow-lg overflow-hidden border border-brand-slate/10">
+                      <div className="p-6 border-b border-brand-slate/10">
+                        <h2 className="font-display text-xl font-semibold text-brand-navy flex items-center gap-2">
+                          <MapPin className="w-5 h-5 text-brand-teal" />
                           Route Preview
                         </h2>
                       </div>
                       
                       {/* Map Placeholder */}
-                      <div className="aspect-[4/3] bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center relative">
-                        {/* Decorative map elements */}
-                        <div className="absolute inset-0 opacity-10">
-                          <svg className="w-full h-full" viewBox="0 0 400 300">
-                            <path d="M50,150 Q100,100 150,120 T250,100 T350,130" stroke="hsl(var(--secondary))" strokeWidth="3" fill="none" strokeDasharray="5,5" />
-                            <circle cx="50" cy="150" r="8" fill="hsl(var(--secondary))" />
-                            <circle cx="350" cy="130" r="8" fill="hsl(var(--coral))" />
-                          </svg>
-                        </div>
-                        
+                      <div className="aspect-[4/3] bg-brand-first flex items-center justify-center relative">
                         <div className="text-center z-10">
-                          <div className="w-16 h-16 bg-background/80 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-soft">
-                            <Navigation className="w-8 h-8 text-muted-foreground" />
+                          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                            <Navigation className="w-8 h-8 text-brand-slate" />
                           </div>
-                          <p className="text-muted-foreground font-medium">Route Visualization</p>
-                          <p className="text-sm text-muted-foreground/70 mt-1">
+                          <p className="text-brand-navy font-medium">Route Visualization</p>
+                          <p className="text-sm text-brand-slate mt-1">
                             {fromLocation} → {toLocation}
                           </p>
                         </div>
                       </div>
 
-                      {/* Route info */}
-                      <div className="p-6 bg-muted/30">
+                      <div className="p-6 bg-brand-first/50">
                         <div className="flex items-center gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="flex items-center gap-2 text-brand-slate">
                             <Clock className="w-4 h-4" />
                             <span>Estimated time: ~25 min</span>
                           </div>
-                          <div className="w-1 h-1 bg-border rounded-full" />
-                          <div className="flex items-center gap-2 text-muted-foreground">
+                          <div className="w-1 h-1 bg-brand-slate/30 rounded-full" />
+                          <div className="flex items-center gap-2 text-brand-slate">
                             <MapPin className="w-4 h-4" />
                             <span>Distance: ~8.5 km</span>
                           </div>
@@ -182,46 +174,38 @@ const CheckRoute = () => {
 
                     {/* Safety Panel */}
                     <div className="lg:col-span-2 space-y-6">
-                      {/* Safety Indicator */}
-                      <div className="bg-card rounded-2xl shadow-card p-6">
-                        <h3 className="font-display text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
-                          <Shield className="w-5 h-5 text-primary" />
+                      <div className="bg-white rounded-2xl shadow-lg p-6 border border-brand-slate/10">
+                        <h3 className="font-display text-lg font-semibold text-brand-navy mb-4 flex items-center gap-2">
+                          <Shield className="w-5 h-5 text-brand-teal" />
                           Safety Awareness
                         </h3>
                         
-                        <div className="bg-secondary/10 rounded-xl p-4 mb-4">
+                        <div className="bg-brand-teal/10 rounded-xl p-4 mb-4">
                           <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-secondary/20 rounded-lg flex items-center justify-center">
-                              <CheckCircle className="w-5 h-5 text-secondary" />
+                            <div className="w-10 h-10 bg-brand-teal/20 rounded-lg flex items-center justify-center">
+                              <CheckCircle className="w-5 h-5 text-brand-navy" />
                             </div>
                             <div>
-                              <p className="font-semibold text-secondary">Moderate Awareness</p>
-                              <p className="text-xs text-muted-foreground">Route conditions analyzed</p>
+                              <p className="font-semibold text-brand-navy">Moderate Awareness</p>
+                              <p className="text-xs text-brand-slate">Route conditions analyzed</p>
                             </div>
                           </div>
-                          <div className="h-2 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full w-2/3 bg-gradient-to-r from-secondary to-teal-light rounded-full" />
+                          <div className="h-2 bg-brand-first rounded-full overflow-hidden">
+                            <div className="h-full w-2/3 bg-brand-teal rounded-full" />
                           </div>
                         </div>
 
                         <div className="space-y-3">
-                          <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                            <Info className="w-4 h-4 text-primary mt-0.5" />
-                            <p className="text-sm text-muted-foreground">
-                              This route passes through moderately populated areas with decent lighting.
-                            </p>
-                          </div>
-                          <div className="flex items-start gap-3 p-3 bg-coral/5 rounded-lg">
-                            <AlertTriangle className="w-4 h-4 text-coral mt-0.5" />
-                            <p className="text-sm text-muted-foreground">
-                              Consider alternative routes during late night hours (11 PM - 5 AM).
+                          <div className="flex items-start gap-3 p-3 bg-brand-first rounded-lg">
+                            <Info className="w-4 h-4 text-brand-slate mt-0.5" />
+                            <p className="text-sm text-brand-slate">
+                              This route passes through moderately populated areas.
                             </p>
                           </div>
                         </div>
                       </div>
 
-                      {/* Reset Button */}
-                      <Button variant="outline" className="w-full" onClick={resetSearch}>
+                      <Button variant="outline" className="w-full border-brand-slate text-brand-navy hover:bg-brand-slate hover:text-white" onClick={resetSearch}>
                         Check Another Route
                       </Button>
                     </div>
@@ -232,14 +216,14 @@ const CheckRoute = () => {
           )}
 
           {/* Safety Tips Section */}
-          <section className="py-12 bg-card">
+          <section className="py-12 bg-white">
             <div className="container px-4">
               <div className="max-w-4xl mx-auto">
                 <div className="flex items-center gap-3 mb-6">
-                  <div className="w-10 h-10 bg-coral/10 rounded-lg flex items-center justify-center">
-                    <Lightbulb className="w-5 h-5 text-coral" />
+                  <div className="w-10 h-10 bg-brand-teal/20 rounded-lg flex items-center justify-center">
+                    <Lightbulb className="w-5 h-5 text-brand-navy" />
                   </div>
-                  <h2 className="font-display text-xl font-semibold text-foreground">
+                  <h2 className="font-display text-xl font-semibold text-brand-navy">
                     Travel Safety Tips
                   </h2>
                 </div>
@@ -248,12 +232,12 @@ const CheckRoute = () => {
                   {safetyTips.map((tip, index) => (
                     <div 
                       key={index}
-                      className="flex items-start gap-3 p-4 bg-background rounded-xl shadow-soft"
+                      className="flex items-start gap-3 p-4 bg-brand-first rounded-xl"
                     >
-                      <div className="w-6 h-6 bg-secondary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-semibold text-secondary">{index + 1}</span>
+                      <div className="w-6 h-6 bg-brand-slate/10 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs font-semibold text-brand-navy">{index + 1}</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">{tip}</p>
+                      <p className="text-sm text-brand-slate">{tip}</p>
                     </div>
                   ))}
                 </div>

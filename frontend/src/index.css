@@ -6,86 +6,89 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    /* Mapping User Palette:
+      1. First  (#ececec) -> Background / Light Elements
+      2. Second (#9fd3c7) -> Secondary / Accents (Teal)
+      3. Third  (#385170) -> Primary / Muted Text (Slate Blue)
+      4. Fourth (#142d4c) -> Foreground / Dark Backgrounds (Navy)
+    */
 
+    /* Background: First Color (#ececec) */
+    --background: 0 0% 92.5%; /* #ececec */
+    
+    /* Foreground (Text): Fourth Color (#142d4c) */
+    --foreground: 213 58% 19%; /* #142d4c */
+
+    /* Card: White or First Color */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 213 58% 19%;
 
+    /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 213 58% 19%;
 
-    --primary: 220 56% 23%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary: Third Color (#385170) */
+    --primary: 213 33% 33%; /* #385170 */
+    --primary-foreground: 0 0% 92.5%;
 
-    --secondary: 168 76% 32%;
-    --secondary-foreground: 210 40% 98%;
+    /* Secondary: Second Color (#9fd3c7) */
+    --secondary: 166 36% 73%; /* #9fd3c7 */
+    --secondary-foreground: 213 58% 19%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    /* Muted */
+    --muted: 213 33% 33%; /* Using Third color as muted base often works, or a shade of First */
+    --muted-foreground: 213 40% 40%;
 
-    --accent: 16 85% 60%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent */
+    --accent: 166 36% 73%; /* Second Color */
+    --accent-foreground: 213 58% 19%;
 
+    /* Destructive */
     --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 220 56% 23%;
+    --border: 213 33% 33%; /* Third Color for borders */
+    --input: 213 33% 33%;
+    --ring: 213 33% 33%;
 
     --radius: 0.75rem;
 
-    /* Custom tokens */
-    --navy: 220 56% 23%;
-    --navy-dark: 220 60% 15%;
-    --teal: 168 76% 32%;
-    --teal-light: 168 60% 45%;
-    --coral: 16 85% 60%;
-    --coral-light: 16 90% 70%;
-    --cream: 40 33% 96%;
-    
-    /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(210 40% 98%) 0%, hsl(200 60% 94%) 50%, hsl(168 40% 92%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--navy-dark)) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(var(--coral)) 0%, hsl(var(--coral-light)) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
-    
-    /* Shadows */
-    --shadow-soft: 0 4px 20px -4px hsl(var(--primary) / 0.1);
-    --shadow-card: 0 8px 30px -8px hsl(var(--primary) / 0.15);
-    --shadow-elevated: 0 20px 50px -15px hsl(var(--primary) / 0.2);
-    --shadow-glow: 0 0 40px hsl(var(--teal) / 0.3);
+    /* Custom Palette Variables for direct usage */
+    --brand-first: 0 0% 92.5%;   /* #ececec */
+    --brand-second: 166 36% 73%; /* #9fd3c7 */
+    --brand-third: 213 33% 33%;  /* #385170 */
+    --brand-fourth: 213 58% 19%; /* #142d4c */
   }
 
   .dark {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    /* Dark Mode Mappings (Inverted) */
+    --background: 213 58% 19%; /* Fourth Color as background */
+    --foreground: 0 0% 92.5%;  /* First Color as text */
 
-    --card: 222 47% 10%;
-    --card-foreground: 210 40% 98%;
+    --card: 213 58% 15%;
+    --card-foreground: 0 0% 92.5%;
 
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 213 58% 15%;
+    --popover-foreground: 0 0% 92.5%;
 
-    --primary: 168 76% 42%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 166 36% 73%;    /* Second Color (Teal) pop in dark mode */
+    --primary-foreground: 213 58% 19%;
 
-    --secondary: 220 50% 30%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 213 33% 33%;  /* Third Color */
+    --secondary-foreground: 0 0% 92.5%;
 
-    --muted: 217 33% 17%;
+    --muted: 213 50% 25%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 16 85% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 166 36% 73%;
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 168 76% 42%;
+    --border: 213 33% 33%;
+    --input: 213 33% 33%;
+    --ring: 166 36% 73%;
   }
 }
 
@@ -105,122 +108,35 @@
 }
 
 @layer components {
-  .gradient-hero {
-    background: var(--gradient-hero);
-  }
-
-  .gradient-primary {
-    background: var(--gradient-primary);
-  }
-
-  .gradient-accent {
-    background: var(--gradient-accent);
-  }
-
-  .shadow-soft {
-    box-shadow: var(--shadow-soft);
-  }
-
-  .shadow-card {
-    box-shadow: var(--shadow-card);
-  }
-
-  .shadow-elevated {
-    box-shadow: var(--shadow-elevated);
-  }
-
-  .shadow-glow {
-    box-shadow: var(--shadow-glow);
-  }
+  /* Helper classes using your palette */
+  .bg-brand-first { background-color: hsl(var(--brand-first)); }
+  .bg-brand-second { background-color: hsl(var(--brand-second)); }
+  .bg-brand-third { background-color: hsl(var(--brand-third)); }
+  .bg-brand-fourth { background-color: hsl(var(--brand-fourth)); }
+  
+  .text-brand-first { color: hsl(var(--brand-first)); }
+  .text-brand-second { color: hsl(var(--brand-second)); }
+  .text-brand-third { color: hsl(var(--brand-third)); }
+  .text-brand-fourth { color: hsl(var(--brand-fourth)); }
 
   .text-gradient {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 100%);
+    background-image: linear-gradient(135deg, hsl(var(--brand-third)) 0%, hsl(var(--brand-fourth)) 100%);
   }
 }
 
 @layer utilities {
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  .animate-pulse-slow {
-    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  .animate-path {
-    animation: pathDraw 3s ease-in-out infinite;
-  }
-
-  .animate-shield {
-    animation: shieldPulse 2s ease-in-out infinite;
-  }
+  .animate-float { animation: float 6s ease-in-out infinite; }
+  .animate-pulse-slow { animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  .animate-shield { animation: shieldPulse 2s ease-in-out infinite; }
 }
 
 @keyframes float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
-}
-
-@keyframes pathDraw {
-  0% {
-    stroke-dashoffset: 1000;
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    stroke-dashoffset: 0;
-    opacity: 0.3;
-  }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
 }
 
 @keyframes shieldPulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 0.9;
-  }
-}
-
-/* Custom variables for the Map Component */
-:root {
-  --teal: 173 58% 39%;       /* HSL values */
-  --teal-light: 173 58% 70%; /* Lighter shade */
-}
-
-/* Animations for AnimatedIndiaMap */
-@keyframes pulse-soft {
-  0%, 100% { opacity: 0.1; }
-  50% { opacity: 0.3; }
-}
-
-@keyframes glow {
-  0%, 100% { filter: drop-shadow(0 0 2px hsl(var(--secondary)/0.5)); }
-  50% { filter: drop-shadow(0 0 8px hsl(var(--secondary)/0.8)); }
-}
-
-@keyframes path-flow {
-  0% { stroke-dashoffset: 1000; }
-  100% { stroke-dashoffset: 0; }
-}
-
-.animate-pulse-soft {
-  animation: pulse-soft 3s ease-in-out infinite;
-}
-
-.animate-glow {
-  animation: glow 4s ease-in-out infinite;
-}
-
-.animate-path-flow {
-  animation: path-flow 8s linear infinite;
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
 }
