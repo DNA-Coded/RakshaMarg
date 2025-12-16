@@ -69,7 +69,11 @@ const HeroSection = () => {
 
       {/* --- LAYER 3: MAIN CONTENT (Bottom Left) --- */}
       <div className="absolute bottom-0 left-0 z-30 w-full p-6 md:p-20 pb-12 md:pb-24">
-        <div className="max-w-5xl">
+        {/* FIX APPLIED HERE: 
+            Added lg:max-w-[55%] to ensure text stays on the left half 
+            on laptop screens (lg/xl) where the box is visible.
+        */}
+        <div className="max-w-5xl lg:max-w-[55%] xl:max-w-[65%] 2xl:max-w-5xl transition-all duration-300">
           
           {/* Glowing Badge */}
           <motion.div 
@@ -84,13 +88,19 @@ const HeroSection = () => {
             </div>
           </motion.div>
 
-          {/* Title - RESPONSIVE SIZES ADDED */}
+          {/* Title - RESPONSIVE SIZES FIXED */}
           <div className="overflow-hidden mb-4 md:mb-6 pb-2 md:pb-4">
+            {/* FIX EXPLANATION:
+                md:text-[9rem] was too big for laptops when the box appeared.
+                - lg:text-[6rem]: Shrinks text on 13" laptops (1024px-1280px)
+                - xl:text-[7.5rem]: Slightly larger on 14"-15" laptops
+                - 2xl:text-[9rem]: Back to massive size on Desktops
+            */}
             <motion.h1 
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-              className="font-display text-5xl sm:text-7xl md:text-[9rem] font-bold text-white leading-[0.9] tracking-tighter"
+              className="font-display text-5xl sm:text-7xl md:text-[9rem] lg:text-[6rem] xl:text-[7.5rem] 2xl:text-[9rem] font-bold text-white leading-[0.9] tracking-tighter transition-all duration-300"
             >
               Raksha<span className="text-brand-purple">Marg</span>
             </motion.h1>
@@ -131,12 +141,16 @@ const HeroSection = () => {
       </div>
 
       {/* --- LAYER 4: FLOATING HUD & IMAGES (Right Side) --- */}
-      {/* Hidden on mobile (lg:flex) to prevent overlap */}
+      {/* FIX APPLIED HERE:
+          - lg:scale-75: Shrink box to 75% on 13" laptops
+          - xl:scale-90: Shrink box to 90% on larger laptops
+          - lg:origin-bottom-right: Ensures it shrinks away from the center text
+      */}
       <motion.div 
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 1.5, duration: 1 }}
-        className="absolute bottom-24 right-8 md:right-20 z-30 hidden lg:flex flex-col gap-6"
+        className="absolute bottom-24 right-8 md:right-20 lg:right-12 xl:right-20 z-30 hidden lg:flex flex-col gap-6 lg:scale-75 xl:scale-90 2xl:scale-100 lg:origin-bottom-right transition-transform duration-300"
       >
         {/* 1. Secured Personnel Card */}
         <div className="bg-white/5 border border-white/10 p-6 rounded-3xl w-72 backdrop-blur-2xl border-l-4 border-l-brand-purple">
