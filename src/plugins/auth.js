@@ -23,21 +23,9 @@ export default fp(async (fastify, opts) => {
         // If no key defined in env, log warning and skip (or fail secure?) -> fail secure.
         // However, for scaffold, let's just check presence or a hardcoded/env secret.
 
-        if (!apiKey) {
-            throw new Error('Missing API Key');
+        // Check against the configured API Key
+        if (!apiKey || apiKey !== config.appApiKey) {
+            throw new Error('Invalid or Missing API Key');
         }
-
-        // TODO: Validate API Key against database validation
-    });
-
-    fastify.decorate('verifyFirebaseToken', async function (request, reply) {
-        // Placeholder for Firebase Auth verification
-        const token = request.headers.authorization?.split('Bearer ')[1];
-        if (!token) {
-            // Depends on if route requires user auth or just API access
-            // Throwing here forces it.
-            throw new Error('Missing User Token');
-        }
-        // await firebase.auth().verifyIdToken(token)...
     });
 });
