@@ -6,3 +6,4 @@ test_output.txt
 test_gemini_local.js
 test_api_output.txt
 test_api_integration.js
+package-lock.json
