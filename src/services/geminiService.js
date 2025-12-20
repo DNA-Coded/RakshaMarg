@@ -89,9 +89,26 @@ export const geminiService = {
     if (!model) {
       console.warn('Gemini API Key missing, skipping analysis');
       return {
-        safetyScore: 50,
-        safetyColor: 'grey',
-        warnings: ['Analysis unavailable (API Key missing)'],
+        status: 'restricted',
+        reason: 'api_key_missing',
+        route_corridor: {
+          name: routeData.summary || 'Unknown Route',
+          primary_segments: []
+        },
+        incidents: [],
+        derived_risk_summary: {
+          overall_risk_level: 'unknown',
+          primary_risk_factors: [],
+          recommended_caution_window: {
+            from: '',
+            to: ''
+          }
+        },
+        source_meta: {
+          generated_by: 'fallback',
+          confidence_overall: 0.0,
+          requires_manual_verification: true
+        },
         modelUsed: 'fallback'
       };
     }
@@ -138,14 +155,28 @@ using recent publicly available reports.
     } catch (error) {
       console.error('Gemini API Error:', error);
       return {
-        safetyScore: 50,
-        safetyColor: 'grey',
-        safetyAnalysis: {
-          riskFactors: ["Error analyzing route"],
-          friendlyTips: [],
-          explanation: "Service temporarily unavailable: " + error.message
+        status: 'restricted',
+        reason: 'api_error',
+        route_corridor: {
+          name: routeData.summary || 'Unknown Route',
+          primary_segments: []
         },
-        modelUsed: 'fallback-error'
+        incidents: [],
+        derived_risk_summary: {
+          overall_risk_level: 'unknown',
+          primary_risk_factors: [],
+          recommended_caution_window: {
+            from: '',
+            to: ''
+          }
+        },
+        source_meta: {
+          generated_by: 'fallback-error',
+          confidence_overall: 0.0,
+          requires_manual_verification: true
+        },
+        modelUsed: 'fallback-error',
+        error: error.message
       };
     }
   }

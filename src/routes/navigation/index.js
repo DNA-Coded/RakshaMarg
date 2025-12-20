@@ -6,6 +6,45 @@ import { geminiService } from '../../services/geminiService.js';
 
 export default async function (fastify, opts) {
 
+    // Helper: Map Gemini risk level to Crime Score (0-30)
+    function mapRiskLevelToCrimeScore(riskLevel) {
+        switch (riskLevel) {
+            case 'low':
+                return 28; // Low crime = high safety score
+            case 'moderate':
+                return 17; // Moderate crime = medium safety score
+            case 'high':
+                return 5; // High crime = low safety score
+            case 'unknown':
+            default:
+                return 15; // Neutral fallback
+        }
+    }
+
+    // Helper: Calculate deterministic safety score
+    function calculateSafetyScore(route, crimeScore) {
+        // Start with crime score (0-30)
+        let score = crimeScore;
+
+        // Add other safety factors (placeholder logic - extend as needed)
+        // Street Lighting (0-20): placeholder
+        const lightingScore = 15;
+
+        // Crowd/Activity (0-20): placeholder
+        const crowdScore = 15;
+
+        // Nearby Help (0-15): placeholder
+        const helpScore = 10;
+
+        // Time of Day (0-15): placeholder
+        const timeScore = 10;
+
+        score += lightingScore + crowdScore + helpScore + timeScore;
+
+        // Clamp between 0 and 100
+        return Math.max(0, Math.min(100, score));
+    }
+
     // GET /route - Calculate safest route
     fastify.get('/route', {
         // Define schema for validation and documentation
@@ -37,8 +76,6 @@ export default async function (fastify, opts) {
         const routes = await mapsService.getRoutes(origin, destination);
 
         // 2. Enhance with Safety Data
-        // Analyze all routes with Gemini as requested
-
         // Machine Context Placeholder (to be filled manually later)
         const machineContext = {};
 
@@ -47,12 +84,41 @@ export default async function (fastify, opts) {
             const nearbyPlaces = [];
             const crimeStats = [];
 
-            // 3. Analyze with Gemini
-            const analysisResult = await geminiService.analyzeSafety(route, crimeStats, machineContext);
+            // 3. Analyze with Gemini for crime/risk intelligence
+            let crimeScore = 15; // Default neutral score
+            let aiCrimeAnalysis = null;
+
+            try {
+                const geminiResult = await geminiService.analyzeSafety(route, crimeStats);
+
+                // Extract risk level from Gemini response
+                const riskLevel = geminiResult?.derived_risk_summary?.overall_risk_level || 'unknown';
+
+                // Map risk level to crime score
+                crimeScore = mapRiskLevelToCrimeScore(riskLevel);
+
+                // Attach Gemini output for transparency
+                aiCrimeAnalysis = geminiResult;
+            } catch (error) {
+                console.error('Error calling Gemini service:', error);
+                // Use neutral crime score on failure
+                crimeScore = 15;
+                aiCrimeAnalysis = {
+                    status: 'error',
+                    reason: 'service_unavailable',
+                    error: error.message
+                };
+            }
+
+            // 4. Calculate deterministic safety score
+            const safetyScore = calculateSafetyScore(route, crimeScore);
 
             return {
                 ...route,
-                ...analysisResult
+                safetyScore,
+                crimeScore,
+                aiCrimeAnalysis,
+                modelUsed: aiCrimeAnalysis?.modelUsed || 'fallback'
             };
         }));
 
