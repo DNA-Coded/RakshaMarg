@@ -173,6 +173,8 @@ const CheckRoute = () => {
         provideRouteAlternatives: true,
       });
       setDirectionsResponse(googleResults);
+      console.log('Google Maps API Response:', googleResults);
+      console.log('Routes found by Google:', googleResults.routes?.length);
 
       // 2. Get Safety Data from Backend
       const safetyData = await analyzeRouteSafety(fromLocation, toLocation);
