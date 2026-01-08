@@ -1,4 +1,4 @@
-# RakshaMarg
+# RakshaMarg Frontend
 
 > **Navigate the Night with Intelligence.**
 
@@ -6,28 +6,113 @@
   <img src="public/logo.png" alt="RakshaMarg Logo" width="200" />
 </p>
 
-## What is RakshaMarg?
+## Overview
 
-RakshaMarg is a navigation app built for safety. While most maps show you the fastest way to get somewhere, we show you the **safest** way.
-
-We calculate safety scores for different routes based on things like street lighting, how busy the area is, and historical safety data. If you're walking alone at night or just want peace of mind, RakshaMarg helps you choose the path with the least risk.
+RakshaMarg is a safety-focused navigation application that prioritizes user safety over speed. By analyzing street lighting, crowd density, and historical safety data, RakshaMarg provides the safest possible routes for pedestrians, especially at night.
 
 ## Key Features
 
-*   **Safety Scores**: Every route gets a score (0-100) so you can compare choices at a glance.
-*   **Smart Routing**: We suggest paths that avoid dark or isolated areas.
-*   **Live Tracking**: Share your live location with friends or family. They can watch your journey in real-time.
-*   **SOS Buton**: One tap to alert your trusted contacts if you feel unsafe.
-*   **Safe Zones**: See nearby police stations, hospitals, and 24/7 public spaces along your way.
+*   **Safety Scores**: Route safety quantification (0-100).
+*   **Smart Routing**: Algorithms that favor well-lit and populated areas.
+*   **Live Tracking**: Real-time location sharing with trusted contacts.
+*   **SOS Button**: Immediate alert system.
+*   **Safe Zones**: Identification of safe havens (police stations, hospitals).
+*   **3D Experience**: Immersive 3D map elements and interactions.
 
-## Tech Stack
+## Prerequisites
 
-We built this using modern web technologies to make it fast and responsive.
+Before you begin, ensure you have the following installed:
 
-*   **Frontend**: React, TypeScript, Vite
-*   **Styling**: Tailwind CSS
-*   **Maps**: Google Maps API with custom layers
-*   **Data Visualization**: Recharts & Framer Motion
+*   **Node.js**: v18.0.0 or higher
+*   **npm** or **bun** (preferred package manager)
+
+## Installation
+
+1.  **Clone the repository** (if you haven't already):
+    ```bash
+    git clone https://github.com/DeepSaha25/RakshaMarg.git
+    cd RakshaMarg/frontend
+    ```
+
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    # or
+    bun install
+    ```
+
+3.  **Environment Setup**:
+    Create a `.env` file in the `frontend` directory based on your configuration requirements (e.g., Google Maps API key).
+    ```env
+    VITE_GOOGLE_MAPS_API_KEY=your_api_key_here
+    ```
+
+4.  **Start the development server**:
+    ```bash
+    npm run dev
+    ```
+    The application will be available at `http://localhost:8080` (or the port shown in your terminal).
+
+## Available Scripts
+
+*   `npm run dev`: Starts the development server with Vite.
+*   `npm run build`: Builds the application for production.
+*   `npm run preview`: Locally previews the production build.
+*   `npm run lint`: Runs ESLint to check for code quality issues.
+
+## Technology Stack
+
+RakshaMarg utilizes a modern stack to ensure performance, type safety, and a premium user experience.
+
+### Core
+*   **React**: UI Library
+*   **TypeScript**: Static Typing
+*   **Vite**: Build Tool & Dev Server
+
+### Styling & UI
+*   **Tailwind CSS**: Utility-first CSS framework
+*   **Shadcn UI**: Reusable components built on **Radix UI** primitives
+*   **Framer Motion**: Powerful animation library
+*   **GSAP**: High-performance animations
+
+### Maps & 3D
+*   **@react-google-maps/api**: Google Maps integration
+*   **React Three Fiber (@react-three/fiber)**: 3D rendering with Three.js
+*   **@react-three/drei**: Useful helpers for R3F
+
+### State & Data
+*   **@tanstack/react-query**: Server state management
+*   **React Hook Form**: Form handling
+*   **Zod**: Schema validation
+*   **Recharts**: Data visualization charts
+
+## Directory Structure
+
+```
+frontend/src/
+├── 3d/                 # 3D models and components (Three.js/R3F)
+├── assets/             # Static assets (images, fonts, global styles)
+├── components/         # Reusable UI components
+│   └── ui/             # Shadcn UI base components
+├── data/               # Static data and constants
+├── hooks/              # Custom React hooks
+├── lib/                # Utility functions and library configurations
+├── pages/              # Route components (Page views)
+│   ├── Index.tsx       # Landing page
+│   ├── CheckRoute.tsx  # Main map/route checking interface
+│   └── Inspiration.tsx # Project inspiration page
+├── services/           # API services and business logic (e.g., navigation)
+├── App.tsx             # Main application component & Routing
+└── main.tsx            # Application entry point
+```
+
+## Contributing
+
+1.  Fork the repository.
+2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+4.  Push to the branch (`git push origin feature/AmazingFeature`).
+5.  Open a Pull Request.
 
 ---
 
