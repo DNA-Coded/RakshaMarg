@@ -100,26 +100,48 @@ const CheckRoute = () => {
       map.fitBounds(bounds);
     }
   }, [map, routeResult, isFullScreen]);
-  useEffect(() => {
-    if (isLoaded && navigator.geolocation && window.google) {
+  const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
+
+  const fetchCurrentLocation = () => {
+    if (navigator.geolocation && window.google) {
+      // Show some loading state if needed, or just rely on the input filling up
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude, longitude, accuracy } = position.coords;
+          setLocationAccuracy(accuracy);
 
           // Reverse Geocoding
           const geocoder = new window.google.maps.Geocoder();
           geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
-            if (status === 'OK' && results && results[0]) {
-              setFromLocation(results[0].formatted_address);
+            if (status === 'OK' && results && results.length > 0) {
+              console.log("Geocoding Results:", results);
+
+              // Priority order for address precision
+              const getPrecisionScore = (res: any) => {
+                const types = res.types;
+                if (types.includes('street_address') || types.includes('premise') || types.includes('subpremise')) return 3;
+                if (types.includes('route') || types.includes('plus_code')) return 2;
+                if (types.includes('neighborhood') || types.includes('political')) return 1;
+                return 0;
+              };
+
+              // Sort by precision
+              const bestResult = results.sort((a, b) => getPrecisionScore(b) - getPrecisionScore(a))[0];
+
+              if (bestResult && getPrecisionScore(bestResult) >= 1) {
+                setFromLocation(bestResult.formatted_address);
+              } else {
+                setFromLocation(results[0].formatted_address);
+              }
             } else {
-              // Fallback if geocoding fails
               setFromLocation(`${latitude},${longitude}`);
             }
           });
         },
         (error) => {
           console.error("Error getting location:", error);
-          // Don't show error immediately on load, just log it
+          alert("Could not get your location. Please ensure location services are enabled.");
         },
         {
           enableHighAccuracy: true,
@@ -127,6 +149,14 @@ const CheckRoute = () => {
           maximumAge: 0
         }
       );
+    }
+  };
+
+  useEffect(() => {
+    if (isLoaded && navigator.geolocation && window.google) {
+      // Auto-fetch on load (optional, maybe distracting if user wants to type?)
+      // We'll keep it but use the shared function
+      fetchCurrentLocation();
     }
   }, [isLoaded]);
 
@@ -634,25 +664,50 @@ const CheckRoute = () => {
                         <div className="w-3 h-3 bg-brand-teal rounded-full animate-pulse shadow-[0_0_10px_rgba(45,212,191,0.5)]" />
                       </div>
                       <div className="flex-1">
-                        <label className="text-xs uppercase tracking-wider text-white/40 font-bold mb-2 block ml-1">Start Location</label>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-xs uppercase tracking-wider text-white/40 font-bold block ml-1">Start Location</label>
+                          {locationAccuracy && (
+                            <span className="text-[10px] uppercase font-bold text-brand-teal animate-pulse">
+                              Accuracy: ±{Math.round(locationAccuracy)}m
+                            </span>
+                          )}
+                        </div>
                         {isLoaded ? (
                           <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                placeholder="Where are you starting from?"
+                                value={fromLocation}
+                                onChange={(e) => setFromLocation(e.target.value)}
+                                className="h-14 bg-black/20 border-white/10 text-white placeholder:text-white/20 focus-visible:ring-1 focus-visible:ring-brand-teal rounded-xl text-lg pr-12"
+                              />
+                              <button
+                                onClick={fetchCurrentLocation}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-brand-teal transition-colors"
+                                title="Use my current location"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="22" y1="12" x2="18" y2="12" /><line x1="6" y1="12" x2="2" y2="12" /><line x1="12" y1="6" x2="12" y2="2" /><line x1="12" y1="22" x2="12" y2="18" /></svg>
+                              </button>
+                            </div>
+                          </Autocomplete>
+                        ) : (
+                          <div className="relative">
                             <Input
                               type="text"
                               placeholder="Where are you starting from?"
                               value={fromLocation}
                               onChange={(e) => setFromLocation(e.target.value)}
-                              className="h-14 bg-black/20 border-white/10 text-white placeholder:text-white/20 focus-visible:ring-1 focus-visible:ring-brand-teal rounded-xl text-lg"
+                              className="h-14 bg-black/20 border-white/10 text-white placeholder:text-white/20 focus-visible:ring-1 focus-visible:ring-brand-teal rounded-xl text-lg pr-12"
                             />
-                          </Autocomplete>
-                        ) : (
-                          <Input
-                            type="text"
-                            placeholder="Where are you starting from?"
-                            value={fromLocation}
-                            onChange={(e) => setFromLocation(e.target.value)}
-                            className="h-14 bg-black/20 border-white/10 text-white placeholder:text-white/20 focus-visible:ring-1 focus-visible:ring-brand-teal rounded-xl text-lg"
-                          />
+                            <button
+                              onClick={fetchCurrentLocation}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-brand-teal transition-colors"
+                              title="Use my current location"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="22" y1="12" x2="18" y2="12" /><line x1="6" y1="12" x2="2" y2="12" /><line x1="12" y1="6" x2="12" y2="2" /><line x1="12" y1="22" x2="12" y2="18" /></svg>
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
