@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
-import { GoogleMap, useJsApiLoader, DirectionsRenderer, Autocomplete, Polyline } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, DirectionsRenderer, Autocomplete, Polyline, Marker, InfoWindow } from '@react-google-maps/api';
 import { MapPin, Navigation, Search, Shield, AlertTriangle, CheckCircle, Info, Share2, Lightbulb, Phone, Siren, Hospital, Maximize2, Minimize2, UserPlus, Trash2, X } from 'lucide-react';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
@@ -45,8 +45,11 @@ const CheckRoute = () => {
   const [map, setMap] = useState<any>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [sosActive, setSosActive] = useState(false);
+  const [userLiveLocation, setUserLiveLocation] = useState<google.maps.LatLngLiteral | null>(null);
 
   const [trackingInterval, setTrackingInterval] = useState<any>(null);
+  const watchIdRef = React.useRef<number | null>(null);
+  const lastApiCallRef = React.useRef<number>(0);
 
   // Trusted Contacts State
   const [showContactModal, setShowContactModal] = useState(false);
@@ -100,6 +103,114 @@ const CheckRoute = () => {
       map.fitBounds(bounds);
     }
   }, [map, routeResult, isFullScreen]);
+
+  // NEW: Police Station Display Logic
+  const [policeStations, setPoliceStations] = useState<google.maps.places.PlaceResult[]>([]);
+  const [hospitals, setHospitals] = useState<google.maps.places.PlaceResult[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<google.maps.places.PlaceResult | null>(null);
+
+  const placesServiceRef = React.useRef<google.maps.places.PlacesService | null>(null);
+
+  useEffect(() => {
+    if (map && !placesServiceRef.current) {
+      placesServiceRef.current = new window.google.maps.places.PlacesService(map);
+    }
+  }, [map]);
+
+  useEffect(() => {
+    if (map && routeResult && window.google) {
+      const fetchServicesAlongRoute = async () => {
+        if (!placesServiceRef.current) return;
+
+        // Get path points
+        let path: google.maps.LatLng[] = [];
+        if (routeResult.overview_path) {
+          path = routeResult.overview_path;
+        } else if (routeResult.overview_polyline) {
+          path = typeof routeResult.overview_polyline === 'string'
+            ? window.google.maps.geometry.encoding.decodePath(routeResult.overview_polyline)
+            : window.google.maps.geometry.encoding.decodePath(routeResult.overview_polyline.points);
+        }
+
+        if (path.length === 0) return;
+
+        const samplePoints: google.maps.LatLng[] = [];
+
+        // Sample points every 5km (5000 meters)
+        const SAMPLE_DISTANCE_METERS = 5000;
+        let distanceAccumulator = 0;
+
+        // Always add start point
+        if (path.length > 0) samplePoints.push(path[0]);
+
+        for (let i = 0; i < path.length - 1; i++) {
+          const p1 = path[i];
+          const p2 = path[i + 1];
+          const distance = window.google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
+
+          distanceAccumulator += distance;
+
+          if (distanceAccumulator >= SAMPLE_DISTANCE_METERS) {
+            samplePoints.push(p2);
+            distanceAccumulator = 0;
+          }
+        }
+
+        // Always add end point
+        if (path.length > 1 && distanceAccumulator > 1000) samplePoints.push(path[path.length - 1]);
+
+        // Limit sample points to avoid hitting API limits too hard
+        // Max 15 search points along the route
+        const limitedSamplePoints = samplePoints.length > 15
+          ? samplePoints.filter((_, index) => index % Math.ceil(samplePoints.length / 15) === 0)
+          : samplePoints;
+
+        const uniquePolice = new Map<string, google.maps.places.PlaceResult>();
+        // const uniqueHospitals = new Map<string, google.maps.places.PlaceResult>();
+
+        const searchAtPoint = (location: google.maps.LatLng, type: string): Promise<google.maps.places.PlaceResult[]> => {
+          return new Promise((resolve) => {
+            const request: google.maps.places.PlaceSearchRequest = {
+              location: location,
+              radius: 5000, // Search 5km radius around sample point (matches sample freq)
+              type: type
+            };
+
+            placesServiceRef.current?.nearbySearch(request, (results, status) => {
+              if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
+                resolve(results);
+              } else {
+                resolve([]);
+              }
+            });
+          });
+        };
+
+        // Execute searches sequentially with delay
+        for (const point of limitedSamplePoints) {
+          try {
+            const policeResults = await searchAtPoint(point, 'police');
+            policeResults.forEach(p => {
+              if (p.place_id && !uniquePolice.has(p.place_id)) {
+                uniquePolice.set(p.place_id, p);
+              }
+            });
+          } catch (e) { console.error(e); }
+
+          // Small delay to prevent rate limiting
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        console.log(`Found ${uniquePolice.size} unique police stations along route.`);
+        setPoliceStations(Array.from(uniquePolice.values()));
+      };
+
+      fetchServicesAlongRoute();
+    } else if (!routeResult) {
+      setPoliceStations([]);
+      setHospitals([]);
+    }
+  }, [map, routeResult]);
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
 
   const fetchCurrentLocation = () => {
@@ -418,60 +529,72 @@ const CheckRoute = () => {
     // Notify contacts that tracking started
     notifyTrustedContacts(`🛡️ I've started a journey on Raksha.\nRoute: ${fromLocation} to ${toLocation}.\nTrack my safety status here: ${window.location.href}`);
 
-    // Track location every 10 seconds
-    const interval = setInterval(() => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (position) => {
+    if (navigator.geolocation) {
+      const id = navigator.geolocation.watchPosition(
+        async (position) => {
           const { latitude, longitude } = position.coords;
 
-          try {
-            const response = await fetch(`${API_BASE_URL}/track`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': API_KEY
-              },
-              body: JSON.stringify({
-                currentLat: latitude,
-                currentLng: longitude,
-                routePolyline: typeof routeResult.overview_polyline === 'string' ? routeResult.overview_polyline : routeResult.overview_polyline?.points
-              })
-            });
+          // Instant UI Update
+          setUserLiveLocation({ lat: latitude, lng: longitude });
 
-            const data = await response.json();
+          // Throttled Backend Call (every 5 seconds)
+          const now = Date.now();
+          if (now - lastApiCallRef.current > 5000) {
+            lastApiCallRef.current = now;
 
-            if (data.needsReroute) {
-              const shouldReroute = confirm(`⚠️ You've deviated ${Math.round(data.distanceFromRoute)}m from the safe route.\n\nWould you like to recalculate?`);
-              if (shouldReroute) {
-                stopTracking();
-                handleCheckRoute();
+            try {
+              const response = await fetch(`${API_BASE_URL}/track`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': API_KEY
+                },
+                body: JSON.stringify({
+                  currentLat: latitude,
+                  currentLng: longitude,
+                  routePolyline: typeof routeResult.overview_polyline === 'string' ? routeResult.overview_polyline : routeResult?.overview_polyline?.points
+                })
+              });
+
+              const data = await response.json();
+
+              if (data.needsReroute) {
+                // Optional: Notify user subtly or via toast instead of blocking alert
+                console.warn('Reroute needed:', data.distanceFromRoute);
               }
+            } catch (error) {
+              console.error('Tracking error:', error);
             }
-          } catch (error) {
-            console.error('Tracking error:', error);
           }
-        }, (error) => console.error("Tracking location error:", error), { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-      }
-    }, 10000);
-    setTrackingInterval(interval);
+        },
+        (error) => console.error("Tracking location error:", error),
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0
+        }
+      );
+      watchIdRef.current = id;
+    }
   };
 
   const stopTracking = () => {
     setIsTracking(false);
-    if (trackingInterval) {
-      clearInterval(trackingInterval);
-      setTrackingInterval(null);
+    setUserLiveLocation(null);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
   };
 
   // Cleanup tracking on unmount
   useEffect(() => {
     return () => {
-      if (trackingInterval) {
-        clearInterval(trackingInterval);
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [trackingInterval]);
+  }, []);
 
   const getTimeRiskWarning = () => {
     const hour = new Date().getHours();
@@ -519,6 +642,17 @@ const CheckRoute = () => {
           <div className="w-2 h-2 bg-white rounded-full animate-ping" />
           <span className="text-xs font-bold text-white">Live Tracking Active</span>
         </div>
+      )}
+
+      {/* Recenter Button */}
+      {isTracking && userLiveLocation && (
+        <button
+          onClick={() => map?.panTo(userLiveLocation)}
+          className="absolute bottom-6 left-6 z-10 bg-black/60 backdrop-blur p-3 rounded-full border border-white/10 text-white/80 hover:bg-brand-teal hover:text-white transition-colors shadow-xl"
+          title="Center on my location"
+        >
+          <Navigation className="w-5 h-5 mx-auto" />
+        </button>
       )}
 
       {/* Map Container */}
@@ -570,6 +704,75 @@ const CheckRoute = () => {
                   strokeOpacity: 1,
                   strokeWeight: 8,
                 }}
+              />
+            )}
+
+            {/* Police Stations Markers */}
+            {policeStations.map((station, idx) => (
+              station.geometry?.location && (
+                <Marker
+                  key={`police-${idx}`}
+                  position={station.geometry.location}
+                  icon={{
+                    url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                    scaledSize: new window.google.maps.Size(40, 40)
+                  }}
+                  onClick={() => setSelectedPlace(station)}
+                />
+              )
+            ))}
+
+            {/* Hospital Markers */}
+            {hospitals.map((hospital, idx) => (
+              hospital.geometry?.location && (
+                <Marker
+                  key={`hospital-${idx}`}
+                  position={hospital.geometry.location}
+                  icon={{
+                    url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                    scaledSize: new window.google.maps.Size(40, 40)
+                  }}
+                  onClick={() => setSelectedPlace(hospital)}
+                />
+              )
+            ))}
+
+            {selectedPlace && selectedPlace.geometry?.location && (
+              <InfoWindow
+                position={selectedPlace.geometry.location}
+                onCloseClick={() => setSelectedPlace(null)}
+              >
+                <div className="text-black p-2 min-w-[200px]">
+                  <h3 className="font-bold text-sm">{selectedPlace.name}</h3>
+                  <p className="text-xs mt-1">{selectedPlace.vicinity}</p>
+                  <div className="flex gap-2 mt-2">
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${selectedPlace.geometry.location.lat()},${selectedPlace.geometry.location.lng()}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs bg-blue-500 text-white px-2 py-1 rounded"
+                    >
+                      Drive Here
+                    </a>
+                  </div>
+                </div>
+              </InfoWindow>
+            )}
+
+            {/* Live Location Marker */}
+            {userLiveLocation && (
+              <Marker
+                position={userLiveLocation}
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: "#00d4ff",
+                  fillOpacity: 1,
+                  strokeColor: "white",
+                  strokeWeight: 2,
+                }}
+                zIndex={100} // Keep on top
+                title="Your Current Location"
               />
             )}
           </GoogleMap>
@@ -993,6 +1196,32 @@ const CheckRoute = () => {
                           </Button>
                         </a>
                       </div>
+
+                      <Button
+                        variant="outline"
+                        className="w-full flex items-center justify-between p-4 h-auto bg-white/5 border-white/10 hover:bg-white/10 text-left group transition-all duration-300"
+                        onClick={() => {
+                          // Construct Google Maps URL
+                          const baseUrl = "https://www.google.com/maps/dir/?api=1";
+                          const origin = encodeURIComponent(fromLocation || "Current Location");
+                          const destination = encodeURIComponent(toLocation);
+                          const travelMode = "driving";
+
+                          let url = `${baseUrl}&origin=${origin}&destination=${destination}&travelmode=${travelMode}`;
+
+                          // Try to add waypoints if available to force the specific route
+                          // Google Maps limit is mostly strict, but we can try passing 'via' points
+                          // This is a best-effort attempt to match the Safety Route
+
+                          window.open(url, '_blank');
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Navigation className="w-5 h-5 text-blue-400" />
+                          <span>Open in Google Maps</span>
+                        </div>
+                        <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">Start Navigation &rarr;</span>
+                      </Button>
 
                       {/* Hospital */}
                       <div className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5">

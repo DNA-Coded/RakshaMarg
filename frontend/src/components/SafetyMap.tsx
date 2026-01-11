@@ -3,7 +3,7 @@ import { GoogleMap, useJsApiLoader, DirectionsRenderer, Marker, InfoWindow } fro
 import { Shield, AlertTriangle, Cross, Phone } from 'lucide-react';
 import { Button } from './ui/button';
 
-const LIBRARIES: ("places" | "geometry" | "drawing" | "visualization")[] = ['places'];
+const LIBRARIES: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
 
 interface SafetyMapProps {
     origin: string;
@@ -196,9 +196,95 @@ const SafetyMap: React.FC<SafetyMapProps> = ({
         }
     }, [isLoaded, map, origin, destination, onRoutesFound]);
 
-    // Fetch Nearby Emergency Services
+    // Fetch Nearby Emergency Services Along Route
     useEffect(() => {
-        if (isLoaded && map && showEmergency && userLocation) {
+        if (isLoaded && map && showEmergency && directionsResponse) {
+            const fetchServicesAlongRoute = async () => {
+                if (!placesServiceRef.current) return;
+
+                const route = directionsResponse.routes[selectedRouteIndex];
+                if (!route || !route.overview_path) return;
+
+                const path = route.overview_path;
+                const samplePoints: google.maps.LatLng[] = [];
+
+                // Sample points every 5km (5000 meters)
+                const SAMPLE_DISTANCE_METERS = 5000;
+                let distanceAccumulator = 0;
+
+                // Always add start point
+                if (path.length > 0) samplePoints.push(path[0]);
+
+                for (let i = 0; i < path.length - 1; i++) {
+                    const p1 = path[i];
+                    const p2 = path[i + 1];
+                    const distance = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
+
+                    distanceAccumulator += distance;
+
+                    if (distanceAccumulator >= SAMPLE_DISTANCE_METERS) {
+                        samplePoints.push(p2);
+                        distanceAccumulator = 0;
+                    }
+                }
+
+                // Always add end point
+                if (path.length > 1) samplePoints.push(path[path.length - 1]);
+
+                // Limit sample points to avoid hitting API limits (max 10 checks)
+                // We prioritize start, end, and spread out the rest
+                const limitedSamplePoints = samplePoints.length > 15
+                    ? samplePoints.filter((_, index) => index % Math.ceil(samplePoints.length / 15) === 0)
+                    : samplePoints;
+
+                const uniquePolice = new Map<string, google.maps.places.PlaceResult>();
+                const uniqueHospitals = new Map<string, google.maps.places.PlaceResult>();
+
+                const searchAtPoint = (location: google.maps.LatLng, type: string): Promise<google.maps.places.PlaceResult[]> => {
+                    return new Promise((resolve) => {
+                        const request: google.maps.places.PlaceSearchRequest = {
+                            location: location,
+                            radius: 5000, // Search 5km radius around sample point
+                            type: type
+                        };
+
+                        placesServiceRef.current?.nearbySearch(request, (results, status) => {
+                            if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+                                resolve(results);
+                            } else {
+                                resolve([]);
+                            }
+                        });
+                    });
+                };
+
+                // Execute searches
+                // We do this sequentially to be nice to the API rate limits or in small batches
+                for (const point of limitedSamplePoints) {
+                    const policeResults = await searchAtPoint(point, 'police');
+                    policeResults.forEach(p => {
+                        if (p.place_id && !uniquePolice.has(p.place_id)) {
+                            uniquePolice.set(p.place_id, p);
+                        }
+                    });
+
+                    const hospitalResults = await searchAtPoint(point, 'hospital');
+                    hospitalResults.forEach(h => {
+                        if (h.place_id && !uniqueHospitals.has(h.place_id)) {
+                            uniqueHospitals.set(h.place_id, h);
+                        }
+                    });
+                    // Small delay to prevent rate limiting
+                    await new Promise(r => setTimeout(r, 300));
+                }
+
+                setPoliceStations(Array.from(uniquePolice.values()));
+                setHospitals(Array.from(uniqueHospitals.values()));
+            };
+
+            fetchServicesAlongRoute();
+        } else if (isLoaded && map && showEmergency && userLocation && !directionsResponse) {
+            // Fallback to original behavior if no route selected yet (just around user)
             const requestPlace = (type: string, setter: React.Dispatch<React.SetStateAction<google.maps.places.PlaceResult[]>>) => {
                 if (!placesServiceRef.current) return;
 
@@ -210,20 +296,20 @@ const SafetyMap: React.FC<SafetyMapProps> = ({
 
                 placesServiceRef.current.nearbySearch(request, (results, status) => {
                     if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-                        const topPlaces = results.slice(0, 5);
-                        setter(topPlaces);
-                        if (onEmergencyFound) onEmergencyFound(type as 'hospital' | 'police', topPlaces);
+                        // Deduplicate locally if needed, but here we just replace
+                        setter(results.slice(0, 5));
                     }
                 });
             };
 
             requestPlace('hospital', setHospitals);
             requestPlace('police', setPoliceStations);
-        } else {
+        }
+        else if (!showEmergency) {
             setHospitals([]);
             setPoliceStations([]);
         }
-    }, [isLoaded, map, showEmergency, userLocation, onEmergencyFound, origin, destination]);
+    }, [isLoaded, map, showEmergency, userLocation, directionsResponse, selectedRouteIndex]);
 
     if (loadError) {
         return <div className="text-white p-4">Error loading maps. Please check API Key.</div>;
