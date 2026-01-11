@@ -43,6 +43,8 @@ const LiveMap: React.FC<LiveMapProps> = ({
     isFullScreen,
     setIsFullScreen
 }) => {
+    if (showResults && !routeResult) return null;
+
     return (
         <div className={`${isFullScreen ? 'lg:col-span-5 h-[85vh]' : 'lg:col-span-3'} bg-white/5 rounded-3xl overflow-hidden border border-white/10 shadow-lg flex flex-col relative group transition-all duration-500`}>
             {/* Badge */}
@@ -205,19 +207,21 @@ const LiveMap: React.FC<LiveMapProps> = ({
                 )}
 
                 {/* Overlay Route Info (Compact) */}
-                <div className="absolute bottom-6 right-6 bg-black/90 backdrop-blur-xl rounded-2xl p-5 border border-white/10 shadow-2xl pointer-events-none">
-                    <div className="text-right">
-                        <p className="text-brand-teal font-bold text-3xl leading-none tracking-tight">
-                            {routeResult?.legs?.[0]?.duration?.text || '~25 min'}
-                        </p>
-                        <div className="flex items-center justify-end gap-2 mt-2">
-                            <div className={`w-2 h-2 rounded-full ${getRiskLabel(routeResult?.safety_score || 0).color.replace('text-', 'bg-')}`} />
-                            <p className={`text-xs font-bold uppercase tracking-wider ${getRiskLabel(routeResult?.safety_score || 0).color}`}>
-                                {getRiskLabel(routeResult?.safety_score || 0).status}
+                {routeResult && (
+                    <div className="absolute bottom-6 right-6 bg-black/90 backdrop-blur-xl rounded-2xl p-5 border border-white/10 shadow-2xl pointer-events-none">
+                        <div className="text-right">
+                            <p className="text-brand-teal font-bold text-3xl leading-none tracking-tight">
+                                {routeResult?.legs?.[0]?.duration?.text || '~25 min'}
                             </p>
+                            <div className="flex items-center justify-end gap-2 mt-2">
+                                <div className={`w-2 h-2 rounded-full ${getRiskLabel(routeResult?.safety_score || 0).color.replace('text-', 'bg-')}`} />
+                                <p className={`text-xs font-bold uppercase tracking-wider ${getRiskLabel(routeResult?.safety_score || 0).color}`}>
+                                    {getRiskLabel(routeResult?.safety_score || 0).status}
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

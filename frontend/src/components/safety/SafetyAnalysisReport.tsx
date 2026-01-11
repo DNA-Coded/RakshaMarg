@@ -44,6 +44,9 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
 }) => {
     const [showAllIncidents, setShowAllIncidents] = useState(false);
 
+    if (!routeResult) return null;
+    const safeAllRoutes = allRoutes || [];
+
     return (
         <div className={`space-y-4 transition-all duration-500 ${isFullScreen ? 'lg:col-span-5' : 'lg:col-span-2'}`}>
             {/* Trusted Contacts Button */}
@@ -149,14 +152,14 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
             </div>
 
             {/* Alternative Routes Selector */}
-            {allRoutes.length > 1 && (
+            {safeAllRoutes.length > 1 && (
                 <div className="bg-white/5 rounded-3xl p-5 border border-white/10 shadow-lg mt-4">
                     <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <Navigation className="w-4 h-4 text-brand-purple" />
                         Alternative Routes
                     </h3>
                     <div className="space-y-2">
-                        {allRoutes.map((route, idx) => {
+                        {safeAllRoutes.map((route, idx) => {
                             const isSelected = routeResult === route;
                             const risk = getRiskLabel(route.safety_score);
                             return (
@@ -188,8 +191,28 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                 </div>
             )}
 
+            {/* Open in Google Maps Button */}
+            <Button
+                variant="outline"
+                className="w-full flex items-center justify-between p-4 h-auto bg-white/5 border-white/10 hover:bg-white/10 text-left group transition-all duration-300 mt-4 shadow-lg"
+                onClick={() => {
+                    const baseUrl = "https://www.google.com/maps/dir/?api=1";
+                    const origin = encodeURIComponent(fromLocation || "Current Location");
+                    const destination = encodeURIComponent(toLocation);
+                    const travelMode = "driving";
+                    const url = `${baseUrl}&origin=${origin}&destination=${destination}&travelmode=${travelMode}`;
+                    window.open(url, '_blank');
+                }}
+            >
+                <div className="flex items-center gap-2">
+                    <Navigation className="w-5 h-5 text-blue-400" />
+                    <span>Open in Google Maps</span>
+                </div>
+                <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">Start Navigation &rarr;</span>
+            </Button>
+
             {/* Safety Warning for Alternative Selection */}
-            {allRoutes.length > 0 && routeResult !== allRoutes[0] && (
+            {safeAllRoutes.length > 0 && routeResult !== safeAllRoutes[0] && (
                 <div className="bg-red-500/10 rounded-3xl p-5 border border-red-500/20 shadow-lg mt-4 animate-pulse">
                     <div className="flex items-start gap-3">
                         <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
@@ -198,14 +221,14 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                 Caution: Safer Route Available
                             </h3>
                             <p className="text-sm text-red-100/70 leading-relaxed">
-                                You have selected a route with a <strong>lower safety score ({routeResult.safety_score})</strong> than the recommended option ({allRoutes[0].safety_score}).
+                                You have selected a route with a <strong>lower safety score ({routeResult.safety_score})</strong> than the recommended option ({safeAllRoutes[0].safety_score}).
                                 Risk factors like lighting issues may be higher here.
                             </p>
                             <Button
                                 size="sm"
                                 variant="outline"
                                 className="mt-3 bg-red-500/20 border-red-500/30 text-red-100 hover:bg-red-500/30"
-                                onClick={() => setRouteResult(allRoutes[0])}
+                                onClick={() => setRouteResult(safeAllRoutes[0])}
                             >
                                 Switch to Safest Route
                             </Button>
@@ -244,24 +267,7 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                         </a>
                     </div>
 
-                    <Button
-                        variant="outline"
-                        className="w-full flex items-center justify-between p-4 h-auto bg-white/5 border-white/10 hover:bg-white/10 text-left group transition-all duration-300"
-                        onClick={() => {
-                            const baseUrl = "https://www.google.com/maps/dir/?api=1";
-                            const origin = encodeURIComponent(fromLocation || "Current Location");
-                            const destination = encodeURIComponent(toLocation);
-                            const travelMode = "driving";
-                            const url = `${baseUrl}&origin=${origin}&destination=${destination}&travelmode=${travelMode}`;
-                            window.open(url, '_blank');
-                        }}
-                    >
-                        <div className="flex items-center gap-2">
-                            <Navigation className="w-5 h-5 text-blue-400" />
-                            <span>Open in Google Maps</span>
-                        </div>
-                        <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">Start Navigation &rarr;</span>
-                    </Button>
+
 
                     {/* Hospital */}
                     <div className="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-white/5">

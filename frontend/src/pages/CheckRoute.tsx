@@ -627,4 +627,14 @@ const CheckRoute = () => {
   );
 };
 
-export default CheckRoute;
+import ErrorBoundary from '../components/ErrorBoundary';
+
+const CheckRouteWithErrorBoundary = () => {
+  return (
+    <ErrorBoundary>
+      <CheckRoute />
+    </ErrorBoundary>
+  );
+};
+
+export default CheckRouteWithErrorBoundary;
