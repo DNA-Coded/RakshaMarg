@@ -3,7 +3,6 @@ import { config } from './config/env.js';
 
 const start = async () => {
     const app = await buildApp();
-    // app.printRoutes();
 
     try {
         await app.listen({ port: config.port, host: '0.0.0.0' });

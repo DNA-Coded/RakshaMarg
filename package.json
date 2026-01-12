@@ -2,11 +2,11 @@
   "name": "rakshamarg-backend",
   "version": "1.0.0",
   "description": "Backend API for RakshaMarg - Safe Routing Application",
-  "main": "src/server.js",
+  "main": "backend/server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node backend/server.js",
+    "dev": "node --watch backend/server.js",
     "test": "node --test"
   },
   "keywords": [
