@@ -124,7 +124,7 @@ graph TD
 ## Quick Links
 
 *   [**Frontend Documentation**](./frontend/README.md) - Setup, and directory structure.
-*   [**Backend Documentation**](./src/README.md) - API endpoints and server setup.
+*   [**Backend Documentation**](./backend/README.md) - API endpoints and server setup.
 
 ---
 
