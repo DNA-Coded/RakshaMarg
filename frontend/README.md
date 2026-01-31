@@ -45,6 +45,8 @@ Before you begin, ensure you have the following installed:
     Create a `.env` file in the `frontend` directory based on your configuration requirements (e.g., Google Maps API key).
     ```env
     VITE_GOOGLE_MAPS_API_KEY=your_api_key_here
+    VITE_API_BASE_URL=your_backend_api_url_here
+    VITE_API_KEY=your_api_key_here
     ```
 
 4.  **Start the development server**:

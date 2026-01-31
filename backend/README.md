@@ -591,9 +591,11 @@ Required environment variables:
 
 ```env
 PORT=8000
-APP_API_KEY=your_api_key_here
+APP_API_KEY=your_secure_random_api_key_here
 GOOGLE_MAPS_API_KEY=your_google_maps_key
 GEMINI_API_KEY=your_gemini_key
+RATE_LIMIT_MAX=100
+RATE_LIMIT_TIME_WINDOW=1m
 ```
 
 ### CORS Configuration

@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
 import { analyzeRouteSafety, getIncidentDetails, IncidentDetail } from '@/services/navigation';
+import { GOOGLE_MAPS_API_KEY } from '@/config';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
 
 export const useRouteSafety = () => {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
-        googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
         libraries
     });
 

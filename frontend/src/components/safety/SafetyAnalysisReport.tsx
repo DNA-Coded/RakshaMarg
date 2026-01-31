@@ -95,7 +95,14 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                     <div className="space-y-3">
                         {routeResult.aiCrimeAnalysis.incidents?.length > 0 ? (
                             <>
-                                <div className={`space-y-3 ${showAllIncidents ? 'max-h-[300px] overflow-y-auto custom-scrollbar pr-2' : ''}`}>
+                                <div
+                                    className={`flex flex-col gap-3 ${
+                                        showAllIncidents
+                                            ? 'max-h-[300px] overflow-y-auto custom-scrollbar overscroll-y-contain pr-2'
+                                            : ''
+                                    }`}
+                                    onWheel={(e) => e.stopPropagation()}
+                                >
                                     {(showAllIncidents
                                         ? routeResult.aiCrimeAnalysis.incidents
                                         : routeResult.aiCrimeAnalysis.incidents.slice(0, 3)
@@ -104,10 +111,10 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                             <div className="shrink-0 mt-0.5">
                                                 <AlertTriangle className="w-4 h-4 text-red-400" />
                                             </div>
-                                            <div>
-                                                <div className="flex justify-between items-start">
-                                                    <p className="text-xs font-bold text-red-200 uppercase tracking-wider">{incident.category || 'Incident'}</p>
-                                                    <span className="text-[10px] text-white/40">{incident.incident_date || 'Recent'}</span>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start w-full gap-2">
+                                                    <p className="text-xs font-bold text-red-200 uppercase tracking-wider truncate pr-2">{incident.category || 'Incident'}</p>
+                                                    <span className="text-[10px] text-white/40 shrink-0 whitespace-nowrap">{incident.incident_date || 'Recent'}</span>
                                                 </div>
                                                 <p className="text-sm text-white/70 mt-1">{incident.description || 'Safety concern reported in this area.'}</p>
                                                 {incident.area && <p className="text-[10px] text-white/30 mt-1">📍 {incident.area}</p>}
@@ -171,8 +178,8 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                         : 'bg-black/20 border-white/5 hover:bg-white/5'
                                         }`}
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isSelected ? 'bg-brand-purple text-white' : 'bg-white/10 text-white/50'
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-xs font-bold ${isSelected ? 'bg-brand-purple text-white' : 'bg-white/10 text-white/50'
                                             }`}>
                                             {idx + 1}
                                         </div>

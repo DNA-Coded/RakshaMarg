@@ -10,7 +10,7 @@ let incidentData = null;
 
 async function loadIncidentData() {
     if (!incidentData) {
-        const dataPath = path.join(__dirname, '..', '..', 'latslong.json');
+        const dataPath = path.join(__dirname, '..', 'latslong.json');
         const rawData = await fs.readFile(dataPath, 'utf-8');
         incidentData = JSON.parse(rawData);
     }
