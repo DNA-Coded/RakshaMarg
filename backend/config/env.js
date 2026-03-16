@@ -1,4 +1,13 @@
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Always load backend/.env, even when the app is started from repository root.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+// Also allow process-level env vars from current working directory .env if present.
 dotenv.config();
 
 export const config = {

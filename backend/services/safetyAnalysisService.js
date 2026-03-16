@@ -7,14 +7,131 @@ const __dirname = path.dirname(__filename);
 
 // Load incident data
 let incidentData = null;
+let localIncidentLoadAttempted = false;
 
-async function loadIncidentData() {
-    if (!incidentData) {
-        const dataPath = path.join(__dirname, '..', '..', 'latslong.json');
-        const rawData = await fs.readFile(dataPath, 'utf-8');
-        incidentData = JSON.parse(rawData);
+const SAFECITY_MAP_API_URL = 'https://webapp.safecity.in/api/reported-incidents/map-coordinates';
+
+function createEmptyIncidentDataset() {
+    return { data: [] };
+}
+
+async function loadLocalIncidentData() {
+    if (localIncidentLoadAttempted) {
+        return incidentData || createEmptyIncidentDataset();
     }
+
+    localIncidentLoadAttempted = true;
+    const dataPath = path.join(__dirname, '..', '..', 'latslong.json');
+
+    try {
+        const rawData = await fs.readFile(dataPath, 'utf-8');
+        const parsed = JSON.parse(rawData);
+        if (parsed && Array.isArray(parsed.data)) {
+            incidentData = parsed;
+        } else {
+            incidentData = createEmptyIncidentDataset();
+        }
+    } catch (error) {
+        console.warn(`Incident dataset not found at ${dataPath}. Falling back to live Safecity API.`);
+        incidentData = createEmptyIncidentDataset();
+    }
+
     return incidentData;
+}
+
+function getUnifiedRouteBound(routes) {
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLng = Infinity;
+    let maxLng = -Infinity;
+
+    for (const route of routes) {
+        const bounds = generateRouteBounds(route);
+        for (const bound of bounds) {
+            minLat = Math.min(minLat, bound.sw.lat);
+            minLng = Math.min(minLng, bound.sw.lng);
+            maxLat = Math.max(maxLat, bound.ne.lat);
+            maxLng = Math.max(maxLng, bound.ne.lng);
+        }
+    }
+
+    if (!Number.isFinite(minLat) || !Number.isFinite(minLng) || !Number.isFinite(maxLat) || !Number.isFinite(maxLng)) {
+        return null;
+    }
+
+    return {
+        ne: { lat: maxLat, lng: maxLng },
+        sw: { lat: minLat, lng: minLng },
+        nw: { lat: maxLat, lng: minLng },
+        se: { lat: minLat, lng: maxLng }
+    };
+}
+
+async function fetchSafecityIncidentData(mapBound) {
+    if (!mapBound) {
+        return createEmptyIncidentDataset();
+    }
+
+    try {
+        const body = new URLSearchParams();
+        body.set('lang_id', '1');
+        body.set('client_id', '1');
+        body.set('city', '');
+        body.set('map_zoom', '12');
+        body.set('map_bound[ne][lat]', String(mapBound.ne.lat));
+        body.set('map_bound[ne][lng]', String(mapBound.ne.lng));
+        body.set('map_bound[sw][lat]', String(mapBound.sw.lat));
+        body.set('map_bound[sw][lng]', String(mapBound.sw.lng));
+        body.set('map_bound[nw][lat]', String(mapBound.nw.lat));
+        body.set('map_bound[nw][lng]', String(mapBound.nw.lng));
+        body.set('map_bound[se][lat]', String(mapBound.se.lat));
+        body.set('map_bound[se][lng]', String(mapBound.se.lng));
+
+        const response = await fetch(SAFECITY_MAP_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString()
+        });
+
+        if (!response.ok) {
+            throw new Error(`Safecity API returned ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const safeData = Array.isArray(payload?.data)
+            ? payload.data
+                .filter(item => item && item.id != null && item.latitude != null && item.longitude != null)
+                .map(item => ({
+                    id: String(item.id),
+                    latitude: String(item.latitude),
+                    longitude: String(item.longitude)
+                }))
+            : [];
+
+        return { data: safeData };
+    } catch (error) {
+        console.warn('Failed to fetch live Safecity coordinates:', error.message);
+        return createEmptyIncidentDataset();
+    }
+}
+
+async function resolveIncidentDataset(routes) {
+    const localData = await loadLocalIncidentData();
+
+    if (Array.isArray(localData?.data) && localData.data.length > 0) {
+        return localData;
+    }
+
+    const mapBound = getUnifiedRouteBound(routes);
+    const liveData = await fetchSafecityIncidentData(mapBound);
+
+    if (Array.isArray(liveData?.data) && liveData.data.length > 0) {
+        return liveData;
+    }
+
+    return localData;
 }
 
 /**
@@ -139,6 +256,10 @@ function generateRouteBounds(route) {
  */
 function findIncidentsInBound(bound, data) {
     const incidents = [];
+
+    if (!data || !Array.isArray(data.data)) {
+        return incidents;
+    }
     
     for (const incident of data.data) {
         const lat = parseFloat(incident.latitude);
@@ -235,10 +356,7 @@ function calculateSafetyScore(incidentCount, currentTime = new Date()) {
  * @param {Date} currentTime - Current time (optional)
  * @returns {Object} - Safety analysis results
  */
-async function analyzeRouteSafety(route, currentTime = new Date()) {
-    // Load incident data
-    const data = await loadIncidentData();
-    
+async function analyzeRouteSafety(route, currentTime = new Date(), data = createEmptyIncidentDataset()) {
     // Generate bounds for the route
     const bounds = generateRouteBounds(route);
     
@@ -278,8 +396,10 @@ async function analyzeRouteSafety(route, currentTime = new Date()) {
  * @returns {Object} - Complete analysis with safest route
  */
 export async function analyzeRoutes(routes, currentTime = new Date()) {
+    const dataset = await resolveIncidentDataset(routes);
+
     const analyses = await Promise.all(
-        routes.map(route => analyzeRouteSafety(route, currentTime))
+        routes.map(route => analyzeRouteSafety(route, currentTime, dataset))
     );
     
     // Find the safest route (highest safety score, lowest incident count as tiebreaker)
@@ -312,7 +432,7 @@ export async function analyzeRoutes(routes, currentTime = new Date()) {
  * @returns {Array} - Array of incident IDs
  */
 export async function getIncidentIdsForRoute(route) {
-    const data = await loadIncidentData();
+    const data = await resolveIncidentDataset([route]);
     const bounds = generateRouteBounds(route);
     
     // Deduplicate incident IDs
