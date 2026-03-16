@@ -15,6 +15,7 @@ interface SafetyAnalysisReportProps {
     handleShareLocation: () => void;
     handleSOS: () => void;
     sosActive: boolean;
+    isSosSending: boolean;
     fromLocation: string;
     toLocation: string;
     isFullScreen: boolean;
@@ -38,6 +39,7 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     handleShareLocation,
     handleSOS,
     sosActive,
+    isSosSending,
     fromLocation,
     toLocation,
     isFullScreen
@@ -296,11 +298,12 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
             {/* SOS Emergency Button */}
             <Button
                 onClick={handleSOS}
-                className={`w-full h-16 ${sosActive ? 'bg-red-600 animate-pulse' : 'bg-red-500 hover:bg-red-600'} text-white rounded-2xl text-lg font-bold shadow-2xl shadow-red-500/50 border-2 border-red-400`}
+                disabled={isSosSending || sosActive}
+                className={`w-full h-16 ${isSosSending ? 'bg-red-600 animate-pulse' : sosActive ? 'bg-red-600' : 'bg-red-500 hover:bg-red-600'} text-white rounded-2xl text-lg font-bold shadow-2xl shadow-red-500/50 border-2 border-red-400`}
             >
                 <div className="flex items-center gap-3">
                     <AlertTriangle className="w-6 h-6" />
-                    <span>{sosActive ? '🚨 SOS ACTIVE' : '🆘 EMERGENCY SOS'}</span>
+                    <span>{isSosSending ? '🚨 SENDING SOS...' : sosActive ? '🚨 SOS ACTIVE' : '🆘 EMERGENCY SOS'}</span>
                 </div>
             </Button>
 

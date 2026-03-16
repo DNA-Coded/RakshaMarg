@@ -197,39 +197,50 @@ const CheckRoute = () => {
   );
 
   const [sosActive, setSosActive] = useState(false);
+  const [isSosSending, setIsSosSending] = useState(false);
 
   const handleSOS = async () => {
-    setSosActive(true);
+    if (sosActive || isSosSending) return;
+
+    setIsSosSending(true);
 
     // Get current location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (position) => {
-        const { latitude, longitude } = position.coords;
-        const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-        // Notify backend
         try {
+          const { latitude, longitude } = position.coords;
+          const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+
+          // Notify backend
           await fetch(`${API_BASE_URL}/sos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
             body: JSON.stringify({ lat: latitude, lng: longitude, timestamp: new Date().toISOString(), route: routeResult?.summary })
           });
-        } catch (e) { console.error(e); }
+          // 1. Notify Trusted Contacts (WhatsApp)
+          const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
+          notifyTrustedContacts(sosMsg);
 
-        // 1. Notify Trusted Contacts (WhatsApp)
-        const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-        notifyTrustedContacts(sosMsg);
+          // 2. Share via Web Share API (native sheet)
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: '🚨 EMERGENCY', text: sosMsg, url: locationLink });
+            } catch (e) { console.log(e); }
+          } else {
+            alert(`Emergency alert sent to ${trustedContacts.length} contacts! Calling Police...`);
+            window.location.href = 'tel:100';
+          }
 
-        // 2. Share via Web Share API (native sheet)
-        if (navigator.share) {
-          try {
-            await navigator.share({ title: '🚨 EMERGENCY', text: sosMsg, url: locationLink });
-          } catch (e) { console.log(e); }
-        } else {
-          alert(`Emergency alert sent to ${trustedContacts.length} contacts! Calling Police...`);
-          window.location.href = 'tel:100';
+          // SOS is considered active after message/location dispatch completes.
+          setSosActive(true);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setIsSosSending(false);
         }
       }, (error) => console.error("SOS location error:", error), { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    } else {
+      setIsSosSending(false);
     }
   };
 
@@ -339,6 +350,7 @@ const CheckRoute = () => {
                   handleShareLocation={handleShareLocation}
                   handleSOS={handleSOS}
                   sosActive={sosActive}
+                  isSosSending={isSosSending}
                   fromLocation={fromLocation}
                   toLocation={toLocation}
                   isFullScreen={isFullScreen}
