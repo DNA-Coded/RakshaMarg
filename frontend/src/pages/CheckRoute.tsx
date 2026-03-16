@@ -82,6 +82,7 @@ const CheckRoute = () => {
   };
 
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
+  const [shouldAutoScrollToResults, setShouldAutoScrollToResults] = useState(false);
 
   const fetchCurrentLocation = () => {
     if (navigator.geolocation && window.google) {
@@ -152,6 +153,21 @@ const CheckRoute = () => {
       setToLocation(place.formatted_address || place.name);
     }
   };
+
+  useEffect(() => {
+    if (!shouldAutoScrollToResults || !showResults || !routeResult) return;
+
+    // Wait for result section (including map) to mount before scrolling.
+    const timer = window.setTimeout(() => {
+      const resultSection = document.getElementById('results');
+      if (resultSection) {
+        resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      setShouldAutoScrollToResults(false);
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [shouldAutoScrollToResults, showResults, routeResult]);
 
   const handleShareLocation = async () => {
     if (navigator.share) {
@@ -321,7 +337,10 @@ const CheckRoute = () => {
                 onOriginPlaceChanged={onOriginPlaceChanged}
                 onDestLoad={onDestLoad}
                 onDestPlaceChanged={onDestPlaceChanged}
-                handleCheckRoute={handleCheckRoute}
+                handleCheckRoute={(from, to) => {
+                  setShouldAutoScrollToResults(true);
+                  return handleCheckRoute(from, to);
+                }}
                 isAnalyzing={isAnalyzing}
                 locationAccuracy={locationAccuracy}
                 error={error}
