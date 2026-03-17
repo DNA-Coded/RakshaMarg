@@ -83,6 +83,7 @@ const CheckRoute = () => {
 
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
   const [shouldAutoScrollToResults, setShouldAutoScrollToResults] = useState(false);
+  const [initialCoordinates, setInitialCoordinates] = useState<google.maps.LatLngLiteral | null>(null);
 
   const fetchCurrentLocation = () => {
     if (navigator.geolocation && window.google) {
@@ -90,6 +91,7 @@ const CheckRoute = () => {
         (position) => {
           const { latitude, longitude, accuracy } = position.coords;
           setLocationAccuracy(accuracy);
+          setInitialCoordinates({ lat: latitude, lng: longitude });
 
           // Reverse Geocoding
           const geocoder = new window.google.maps.Geocoder();
@@ -275,7 +277,7 @@ const CheckRoute = () => {
       selectedPlace={selectedPlace}
       setSelectedPlace={setSelectedPlace}
       isTracking={isTracking}
-      userLiveLocation={userLiveLocation}
+      userLiveLocation={userLiveLocation || initialCoordinates}
       userBearing={userBearing}
       isFullScreen={isFullScreen}
       setIsFullScreen={setIsFullScreen}
