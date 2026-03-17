@@ -37,6 +37,11 @@ const RouteInputForm: React.FC<RouteInputFormProps> = ({
     locationAccuracy,
     error
 }) => {
+    const autocompleteOptions: google.maps.places.AutocompleteOptions = {
+        componentRestrictions: { country: 'in' },
+        fields: ['formatted_address', 'geometry', 'name', 'place_id'],
+    };
+
     return (
         <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 md:p-10 border border-white/10 shadow-2xl relative overflow-hidden">
             {/* Subtle background glow */}
@@ -65,7 +70,7 @@ const RouteInputForm: React.FC<RouteInputFormProps> = ({
                                 )}
                             </div>
                             {isLoaded ? (
-                                <Autocomplete onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
+                                <Autocomplete options={autocompleteOptions} onLoad={onOriginLoad} onPlaceChanged={onOriginPlaceChanged}>
                                     <div className="relative">
                                         <Input
                                             type="text"
@@ -111,7 +116,7 @@ const RouteInputForm: React.FC<RouteInputFormProps> = ({
                         <div className="flex-1">
                             <label className="text-xs uppercase tracking-wider text-white/40 font-bold mb-2 block ml-1">Destination</label>
                             {isLoaded ? (
-                                <Autocomplete onLoad={onDestLoad} onPlaceChanged={onDestPlaceChanged}>
+                                <Autocomplete options={autocompleteOptions} onLoad={onDestLoad} onPlaceChanged={onDestPlaceChanged}>
                                     <Input
                                         type="text"
                                         placeholder="Where do you want to go?"

@@ -310,40 +310,35 @@ function getTimeRiskMultiplier(date = new Date()) {
  * @param {Date} currentTime - Current time (optional)
  * @returns {Object} - {score: number, riskLevel: string}
  */
-function calculateSafetyScore(incidentCount, currentTime = new Date()) {
-    // Step 1: Logarithmic scaling for incident penalty
-    // This prevents early capping and differentiates between high incident counts
-    // Formula: penalty = 20 * log10(incidents + 1) 
-    // 0 incidents = 0 penalty
-    // 10 incidents = 20 penalty
-    // 100 incidents = 40 penalty
-    // 1000 incidents = 60 penalty
+function calculateSafetyScore(incidentCount, routeDistanceKm = 1, currentTime = new Date()) {
+    const safeDistanceKm = Math.max(routeDistanceKm, 0.5);
+    const incidentsPerKm = incidentCount / safeDistanceKm;
+
+    // Penalize both total incidents and incident density so long routes are not unfairly penalized.
     let incidentPenalty = 0;
     if (incidentCount > 0) {
-        incidentPenalty = 20 * Math.log10(incidentCount + 1);
+        const densityPenalty = 22 * Math.log10(incidentsPerKm + 1);
+        const countPenalty = 10 * Math.log10(incidentCount + 1);
+        incidentPenalty = densityPenalty + countPenalty;
     }
-    
-    // Cap at 75 to allow some base score even for very high incident areas
-    incidentPenalty = Math.min(incidentPenalty, 75);
-    
-    // Step 2: Time-of-day risk multiplier
+
+    incidentPenalty = Math.min(incidentPenalty, 85);
+
     const multiplier = getTimeRiskMultiplier(currentTime);
     const timeAdjustedPenalty = incidentPenalty * multiplier;
-    
-    // Step 3: Final safety score
+
     const rawScore = 100 - timeAdjustedPenalty;
     const finalScore = Math.max(0, Math.min(100, rawScore));
-    
-    // Determine risk level with better thresholds
+
     let riskLevel;
-    if (finalScore >= 75) {
+    if (finalScore >= 70) {
         riskLevel = 'Low Risk';
-    } else if (finalScore >= 50) {
+    } else if (finalScore >= 45) {
         riskLevel = 'Moderate Risk';
     } else {
         riskLevel = 'High Risk';
     }
-    
+
     return {
         score: Math.round(finalScore),
         riskLevel
@@ -372,9 +367,15 @@ async function analyzeRouteSafety(route, currentTime = new Date(), data = create
     
     // Count unique incidents
     const incidentCount = allIncidentIds.length;
+
+    // Route distance from Google route legs, fallback to 1 km if unavailable.
+    const routeDistanceMeters = Array.isArray(route.legs)
+        ? route.legs.reduce((sum, leg) => sum + (leg?.distance?.value || 0), 0)
+        : 0;
+    const routeDistanceKm = routeDistanceMeters > 0 ? routeDistanceMeters / 1000 : 1;
     
     // Calculate safety score
-    const { score, riskLevel } = calculateSafetyScore(incidentCount, currentTime);
+    const { score, riskLevel } = calculateSafetyScore(incidentCount, routeDistanceKm, currentTime);
     
     // Extract route name from Google Maps response
     const routeName = route.summary || 'Route';
@@ -383,6 +384,7 @@ async function analyzeRouteSafety(route, currentTime = new Date(), data = create
         route_name: routeName,
         safety_score: score,
         incident_count: incidentCount,
+        route_distance_km: Number(routeDistanceKm.toFixed(2)),
         risk_level: riskLevel,
         bounds_analyzed: bounds.length,
         incident_ids: allIncidentIds

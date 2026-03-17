@@ -4,6 +4,31 @@ import { analyzeRouteSafety, getIncidentDetails, IncidentDetail } from '@/servic
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
 
+interface ResolvedLocation {
+    formattedAddress: string;
+    lat: number;
+    lng: number;
+}
+
+const getRouteFingerprint = (route: google.maps.DirectionsRoute) => {
+    const encoded = route.overview_polyline?.toString?.() || (route as any).overview_polyline?.points;
+    if (encoded) return encoded;
+
+    const totalDistance = Array.isArray(route.legs)
+        ? route.legs.reduce((sum, leg) => sum + (leg.distance?.value || 0), 0)
+        : 0;
+    const totalDuration = Array.isArray(route.legs)
+        ? route.legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0)
+        : 0;
+
+    return `${route.summary || 'route'}|${totalDistance}|${totalDuration}`;
+};
+
+const getRouteDurationSeconds = (route: google.maps.DirectionsRoute) => {
+    if (!Array.isArray(route.legs)) return Number.MAX_SAFE_INTEGER;
+    return route.legs.reduce((sum, leg) => sum + (leg.duration?.value || 0), 0);
+};
+
 export const useRouteSafety = () => {
     const { isLoaded } = useJsApiLoader({
         id: 'google-map-script',
@@ -39,6 +64,43 @@ export const useRouteSafety = () => {
         }
     }, [map]);
 
+    const resolveLocation = async (input: string): Promise<ResolvedLocation> => {
+        if (!window.google?.maps?.Geocoder) {
+            throw new Error('Google Maps Geocoder is unavailable');
+        }
+
+        const geocoder = new window.google.maps.Geocoder();
+
+        return new Promise((resolve, reject) => {
+            geocoder.geocode(
+                {
+                    address: input,
+                    componentRestrictions: { country: 'IN' }
+                },
+                (results, status) => {
+                    if (status !== 'OK' || !results || results.length === 0) {
+                        reject(new Error(`Could not resolve location: ${input}`));
+                        return;
+                    }
+
+                    const best = results[0];
+                    const location = best.geometry?.location;
+
+                    if (!location) {
+                        reject(new Error(`Location has no geometry: ${input}`));
+                        return;
+                    }
+
+                    resolve({
+                        formattedAddress: best.formatted_address || input,
+                        lat: location.lat(),
+                        lng: location.lng(),
+                    });
+                }
+            );
+        });
+    };
+
     const handleCheckRoute = async (fromLocation: string, toLocation: string) => {
         if (!fromLocation || !toLocation || !isLoaded || !window.google) return;
 
@@ -48,18 +110,101 @@ export const useRouteSafety = () => {
         setDirectionsResponse(null);
 
         try {
-            // 1. Get Google Maps Directions first
+            // Resolve both locations to exact coordinates for consistent routing across regions.
+            const [resolvedOrigin, resolvedDestination] = await Promise.all([
+                resolveLocation(fromLocation),
+                resolveLocation(toLocation),
+            ]);
+
+            const originCoord = `${resolvedOrigin.lat},${resolvedOrigin.lng}`;
+            const destinationCoord = `${resolvedDestination.lat},${resolvedDestination.lng}`;
+
             const directionsService = new window.google.maps.DirectionsService();
-            const googleResults = await directionsService.route({
-                origin: fromLocation,
-                destination: toLocation,
+
+            const runDirections = (request: google.maps.DirectionsRequest) =>
+                directionsService.route(request);
+
+            // 1) Primary query with coordinates
+            const coordResults = await runDirections({
+                origin: originCoord,
+                destination: destinationCoord,
                 travelMode: window.google.maps.TravelMode.DRIVING,
                 provideRouteAlternatives: true,
             });
+
+            // 2) Address query often yields better alternative routes for typed/manual inputs
+            const addressOrigin = resolvedOrigin.formattedAddress || fromLocation;
+            const addressDestination = resolvedDestination.formattedAddress || toLocation;
+            const addressResults = await runDirections({
+                origin: addressOrigin,
+                destination: addressDestination,
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                provideRouteAlternatives: true,
+                region: 'IN',
+            });
+
+            const baseResults = (addressResults.routes?.length || 0) >= (coordResults.routes?.length || 0)
+                ? addressResults
+                : coordResults;
+
+            const baseOrigin = baseResults === addressResults ? addressOrigin : originCoord;
+            const baseDestination = baseResults === addressResults ? addressDestination : destinationCoord;
+
+            // 3) Expand route options using avoid constraints
+            const strategyResults = await Promise.all([
+                runDirections({
+                    origin: baseOrigin,
+                    destination: baseDestination,
+                    travelMode: window.google.maps.TravelMode.DRIVING,
+                    provideRouteAlternatives: true,
+                    avoidHighways: true,
+                    region: 'IN',
+                }),
+                runDirections({
+                    origin: baseOrigin,
+                    destination: baseDestination,
+                    travelMode: window.google.maps.TravelMode.DRIVING,
+                    provideRouteAlternatives: true,
+                    avoidTolls: true,
+                    region: 'IN',
+                }),
+                runDirections({
+                    origin: baseOrigin,
+                    destination: baseDestination,
+                    travelMode: window.google.maps.TravelMode.DRIVING,
+                    provideRouteAlternatives: true,
+                    avoidHighways: true,
+                    avoidTolls: true,
+                    region: 'IN',
+                })
+            ]);
+
+            const allCandidateRoutes = [
+                ...(baseResults.routes || []),
+                ...strategyResults.flatMap(result => result.routes || []),
+            ];
+
+            const uniqueRouteMap = new Map<string, google.maps.DirectionsRoute>();
+            for (const route of allCandidateRoutes) {
+                const key = getRouteFingerprint(route);
+                if (!uniqueRouteMap.has(key)) {
+                    uniqueRouteMap.set(key, route);
+                }
+            }
+
+            const mergedGoogleRoutes = Array.from(uniqueRouteMap.values())
+                .sort((a, b) => getRouteDurationSeconds(a) - getRouteDurationSeconds(b))
+                .slice(0, 3);
+
+            const googleResults = {
+                ...baseResults,
+                routes: mergedGoogleRoutes,
+            };
+
             setDirectionsResponse(googleResults);
 
             // 2. Get Safety Data from Backend
-            const safetyData = await analyzeRouteSafety(fromLocation, toLocation);
+            const safetyData = await analyzeRouteSafety(baseOrigin, baseDestination);
 
             // 3. Merge datasets
             if (googleResults.routes && googleResults.routes.length > 0) {
@@ -144,10 +289,18 @@ export const useRouteSafety = () => {
                     }
                 } catch (e) { console.error("Error fetching emergency places", e); }
 
+                const safetyRoutes = Array.isArray(safetyData.routes) ? safetyData.routes : [];
+                const safetyByName = new Map<string, any>();
+                safetyRoutes.forEach((route: any) => {
+                    if (route?.route_name) {
+                        safetyByName.set(route.route_name, route);
+                    }
+                });
+
                 const mergedRoutes = googleResults.routes.map((gRoute: any, index: number) => {
-                    const sRoute: any = (safetyData.routes && safetyData.routes[index])
-                        ? safetyData.routes[index]
-                        : { safety_score: 70, risk_level: 'Moderate', incident_count: 0, incident_ids: [] };
+                    const byName = safetyByName.get(gRoute.summary);
+                    const byIndex = safetyRoutes[index];
+                    const sRoute: any = byName || byIndex || { safety_score: 70, risk_level: 'Moderate', incident_count: 0, incident_ids: [] };
 
                     const routeIncidents = (sRoute.incident_ids || []).map((id: number) => incidentDetailsMap[id]).filter(Boolean);
 
