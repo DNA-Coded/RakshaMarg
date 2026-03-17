@@ -202,6 +202,7 @@ const CheckRoute = () => {
   const {
     isTracking,
     userLiveLocation,
+    userBearing,
     startTracking,
     stopTracking
   } = useLiveTracking(
@@ -275,6 +276,7 @@ const CheckRoute = () => {
       setSelectedPlace={setSelectedPlace}
       isTracking={isTracking}
       userLiveLocation={userLiveLocation}
+      userBearing={userBearing}
       isFullScreen={isFullScreen}
       setIsFullScreen={setIsFullScreen}
     />

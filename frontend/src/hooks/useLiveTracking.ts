@@ -11,9 +11,11 @@ export const useLiveTracking = (
 ) => {
     const [isTracking, setIsTracking] = useState(false);
     const [userLiveLocation, setUserLiveLocation] = useState<google.maps.LatLngLiteral | null>(null);
+    const [userBearing, setUserBearing] = useState<number>(0);
 
     const watchIdRef = useRef<number | null>(null);
     const lastApiCallRef = useRef<number>(0);
+    const lastLocationRef = useRef<google.maps.LatLngLiteral | null>(null);
 
     const startTracking = () => {
         if (!routeResult?.overview_polyline) return;
@@ -27,10 +29,28 @@ export const useLiveTracking = (
         if (navigator.geolocation) {
             const id = navigator.geolocation.watchPosition(
                 async (position) => {
-                    const { latitude, longitude } = position.coords;
+                    const { latitude, longitude, heading } = position.coords;
+                    const newLocation = { lat: latitude, lng: longitude };
+
+                    // Calculate bearing if heading is not provided by device
+                    let currentBearing = heading || 0;
+                    if (heading === null && lastLocationRef.current && window.google) {
+                        try {
+                           currentBearing = window.google.maps.geometry.spherical.computeHeading(
+                                lastLocationRef.current,
+                                newLocation
+                            );
+                        } catch (e) {
+                             currentBearing = userBearing;
+                        }
+                    }
 
                     // Instant UI Update
-                    setUserLiveLocation({ lat: latitude, lng: longitude });
+                    setUserLiveLocation(newLocation);
+                    if (currentBearing !== null && !isNaN(currentBearing)) {
+                         setUserBearing(currentBearing);
+                    }
+                    lastLocationRef.current = newLocation;
 
                     // Throttled Backend Call (every 5 seconds)
                     const now = Date.now();
@@ -100,6 +120,7 @@ export const useLiveTracking = (
     return {
         isTracking,
         userLiveLocation,
+        userBearing,
         startTracking,
         stopTracking
     };

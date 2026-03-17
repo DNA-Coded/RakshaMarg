@@ -16,6 +16,7 @@ interface LiveMapProps {
     setSelectedPlace: (place: google.maps.places.PlaceResult | null) => void;
     isTracking: boolean;
     userLiveLocation: google.maps.LatLngLiteral | null;
+    userBearing?: number;
     isFullScreen: boolean;
     setIsFullScreen: (isFull: boolean) => void;
 }
@@ -40,6 +41,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
     setSelectedPlace,
     isTracking,
     userLiveLocation,
+    userBearing,
     isFullScreen,
     setIsFullScreen
 }) => {
@@ -188,15 +190,33 @@ const LiveMap: React.FC<LiveMapProps> = ({
                             <Marker
                                 position={userLiveLocation}
                                 icon={{
-                                    path: window.google.maps.SymbolPath.CIRCLE,
-                                    scale: 8,
-                                    fillColor: "#00d4ff",
+                                    // A car icon or a prominent navigation arrow
+                                    path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                                    scale: 6,
+                                    fillColor: "#4285F4",
                                     fillOpacity: 1,
                                     strokeColor: "white",
                                     strokeWeight: 2,
+                                    rotation: userBearing || 0
                                 }}
-                                zIndex={100} // Keep on top
+                                zIndex={1000} // Keep on top
                                 title="Your Current Location"
+                            />
+                        )}
+
+                        {/* Pulsing effect behind the live marker */}
+                        {userLiveLocation && isTracking && (
+                             <Marker
+                                position={userLiveLocation}
+                                icon={{
+                                    path: window.google.maps.SymbolPath.CIRCLE,
+                                    scale: 14,
+                                    fillColor: "#4285F4",
+                                    fillOpacity: 0.3,
+                                    strokeColor: "transparent",
+                                    strokeWeight: 0,
+                                }}
+                                zIndex={999}
                             />
                         )}
                     </GoogleMap>
