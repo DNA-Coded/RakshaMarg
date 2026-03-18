@@ -19,6 +19,7 @@ import { motion } from 'framer-motion';
 import mapImage from '@/assets/map.png';
 import { analyzeRouteSafety, getIncidentDetails, RouteInfo, IncidentDetail } from '@/services/navigation';
 import { API_BASE_URL, API_KEY } from '@/config';
+import { toast } from '@/hooks/use-toast';
 
 const safetyTips = [
   "Share your live location with a trusted contact.",
@@ -123,7 +124,14 @@ const CheckRoute = () => {
         },
         (error) => {
           console.error("Error getting location:", error);
-          alert("Could not get your location. Please ensure location services are enabled.");
+          const locationErrorMessage = error.code === error.PERMISSION_DENIED
+            ? 'Location access is blocked. Enable location permission and try again.'
+            : 'Could not get your location. Please ensure location services are enabled.';
+          toast({
+            title: 'Location unavailable',
+            description: locationErrorMessage,
+            variant: 'destructive'
+          });
         },
         {
           enableHighAccuracy: true,
@@ -183,7 +191,20 @@ const CheckRoute = () => {
         console.log('Error sharing:', error);
       }
     } else {
-      alert('Live location link copied to clipboard!');
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast({
+          title: 'Link copied',
+          description: 'Live location link copied to clipboard.'
+        });
+      } catch (error) {
+        console.error('Clipboard write failed:', error);
+        toast({
+          title: 'Share failed',
+          description: 'Could not copy the live location link. Please copy it manually from the address bar.',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
@@ -253,7 +274,10 @@ const CheckRoute = () => {
               await navigator.share({ title: '🚨 EMERGENCY', text: sosMsg, url: locationLink });
             } catch (e) { console.log(e); }
           } else {
-            alert(`Emergency alert sent to ${trustedContacts.length} contacts! Calling Police...`);
+            toast({
+              title: 'Emergency alert sent',
+              description: `Alert sent to ${trustedContacts.length} contacts. Calling police helpline...`
+            });
             window.location.href = 'tel:100';
           }
 
@@ -261,11 +285,29 @@ const CheckRoute = () => {
           setSosActive(true);
         } catch (e) {
           console.error(e);
+          toast({
+            title: 'SOS failed',
+            description: 'Unable to send emergency alert right now. Please try again.',
+            variant: 'destructive'
+          });
         } finally {
           setIsSosSending(false);
         }
-      }, (error) => console.error("SOS location error:", error), { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+      }, (error) => {
+        console.error("SOS location error:", error);
+        toast({
+          title: 'SOS location failed',
+          description: 'Unable to fetch your location for SOS. Turn on GPS and retry.',
+          variant: 'destructive'
+        });
+        setIsSosSending(false);
+      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
     } else {
+      toast({
+        title: 'SOS unavailable',
+        description: 'Geolocation is not supported in this browser.',
+        variant: 'destructive'
+      });
       setIsSosSending(false);
     }
   };

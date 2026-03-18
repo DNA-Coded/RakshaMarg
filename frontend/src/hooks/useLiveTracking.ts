@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 
 import { API_BASE_URL, API_KEY } from '../config';
+import { toast } from './use-toast';
 
 const ROUTE_RECALC_MIN_DISTANCE_METERS = 15;
 const ROUTE_RECALC_MIN_INTERVAL_MS = 5000;
 const ROUTE_UPDATE_DEBOUNCE_MS = 400;
 const GPS_SIGNAL_TIMEOUT_MS = 20000;
 const ROUTE_UPDATE_BACKOFF_MS = [5000, 10000, 20000] as const;
+const DEVIATION_NOTICE_COOLDOWN_MS = 30000;
+const TRACKING_ERROR_NOTICE_COOLDOWN_MS = 15000;
 
 type TrackingMode = 'passive' | 'navigation' | 'sos';
 
@@ -114,6 +117,12 @@ export const useLiveTracking = (
     const lastNearbySearchCallAtRef = useRef<number>(0);
     const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
     const nearbySearchRequestIdRef = useRef(0);
+    const lastDeviationNoticeAtRef = useRef(0);
+    const trackRequestAbortControllerRef = useRef<AbortController | null>(null);
+    const isTrackRequestInFlightRef = useRef(false);
+    const isTrackingActiveRef = useRef(false);
+    const isMountedRef = useRef(true);
+    const lastTrackingErrorNoticeAtRef = useRef(0);
 
     const clearGpsSignalTimeout = () => {
         if (gpsSignalTimeoutRef.current !== null) {
@@ -142,6 +151,14 @@ export const useLiveTracking = (
             window.clearTimeout(nearbySearchDebounceRef.current);
             nearbySearchDebounceRef.current = null;
         }
+    };
+
+    const abortTrackRequest = () => {
+        if (trackRequestAbortControllerRef.current) {
+            trackRequestAbortControllerRef.current.abort();
+            trackRequestAbortControllerRef.current = null;
+        }
+        isTrackRequestInFlightRef.current = false;
     };
 
     const getPlacesService = () => {
@@ -325,12 +342,24 @@ export const useLiveTracking = (
     };
 
     const startTracking = (mode: TrackingMode = 'navigation') => {
-        if (!routeResult?.overview_polyline) return;
+        if (!routeResult?.overview_polyline) {
+            setTrackingError('Please analyze a route first before starting live tracking.');
+            return;
+        }
+
+        if (watchIdRef.current !== null) {
+            navigator.geolocation.clearWatch(watchIdRef.current);
+            watchIdRef.current = null;
+        }
+
+        abortTrackRequest();
         setIsTracking(true);
         setLiveDirectionsResponse(null);
         setTrackingError(null);
         setIsGpsSignalLost(false);
         setIsRouteUpdatesPaused(false);
+        isTrackingActiveRef.current = true;
+        lastApiCallRef.current = 0;
         lastRouteOriginRef.current = null;
         lastRouteCallAtRef.current = 0;
         lastNearbySearchOriginRef.current = null;
@@ -338,6 +367,7 @@ export const useLiveTracking = (
         setNearestHospital(null);
         setNearestPoliceStation(null);
         resetRouteUpdateBackoff();
+        lastDeviationNoticeAtRef.current = 0;
         trackingModeRef.current = mode;
         armGpsSignalTimeout();
 
@@ -349,6 +379,10 @@ export const useLiveTracking = (
         if (navigator.geolocation) {
             const id = navigator.geolocation.watchPosition(
                 async (position) => {
+                    if (!isTrackingActiveRef.current || !isMountedRef.current) {
+                        return;
+                    }
+
                     const { latitude, longitude, heading } = position.coords;
                     const currentLocation = { lat: latitude, lng: longitude };
 
@@ -390,11 +424,19 @@ export const useLiveTracking = (
                     const now = Date.now();
                     if (now - lastApiCallRef.current > 5000) {
                         if (!navigator.onLine) {
+                            setIsRouteUpdatesPaused(true);
                             setTrackingError('You are offline. Some live safety checks are paused.');
                             return;
                         }
 
+                        if (isTrackRequestInFlightRef.current) {
+                            return;
+                        }
+
                         lastApiCallRef.current = now;
+                        const controller = new AbortController();
+                        trackRequestAbortControllerRef.current = controller;
+                        isTrackRequestInFlightRef.current = true;
 
                         try {
                             const response = await fetch(`${API_BASE_URL}/track`, {
@@ -403,6 +445,7 @@ export const useLiveTracking = (
                                     'Content-Type': 'application/json',
                                     'x-api-key': API_KEY
                                 },
+                                signal: controller.signal,
                                 body: JSON.stringify({
                                     currentLat: latitude,
                                     currentLng: longitude,
@@ -410,20 +453,52 @@ export const useLiveTracking = (
                                 })
                             });
 
-                            const data = await response.json();
+                            if (!response.ok) {
+                                throw new Error(`Track endpoint failed with status ${response.status}`);
+                            }
 
-                            if (data.needsReroute) {
-                                // Optional: Notify user subtly or via toast instead of blocking alert
+                            const data = await response.json().catch(() => ({}));
+
+                            if (!isTrackingActiveRef.current || !isMountedRef.current) {
+                                return;
+                            }
+
+                            setTrackingError(null);
+
+                            if (data?.needsReroute) {
                                 console.warn('Reroute needed:', data.distanceFromRoute);
 
-                                const shouldReroute = confirm(`⚠️ You've deviated ${Math.round(data.distanceFromRoute)}m from the safe route.\n\nWould you like to recalculate?`);
-                                if (shouldReroute && handleCheckRoute) {
-                                    stopTracking();
-                                    handleCheckRoute();
+                                const deviationMeters = Math.max(0, Math.round(Number(data.distanceFromRoute) || 0));
+                                const noticeDue = now - lastDeviationNoticeAtRef.current >= DEVIATION_NOTICE_COOLDOWN_MS;
+
+                                if (noticeDue) {
+                                    lastDeviationNoticeAtRef.current = now;
+                                    toast({
+                                        title: 'Route deviation detected',
+                                        description: deviationMeters > 0
+                                            ? `You are ${deviationMeters}m away from the safer route. Recalculating now.`
+                                            : 'You are away from the safer route. Recalculating now.'
+                                    });
                                 }
+
+                                scheduleRouteUpdate(currentLocation);
                             }
                         } catch (error) {
+                            if ((error as Error)?.name === 'AbortError') {
+                                return;
+                            }
+
+                            const nowError = Date.now();
+                            if (nowError - lastTrackingErrorNoticeAtRef.current >= TRACKING_ERROR_NOTICE_COOLDOWN_MS) {
+                                lastTrackingErrorNoticeAtRef.current = nowError;
+                                setTrackingError('Live safety checks are delayed. Retrying automatically.');
+                            }
                             console.error('Tracking error:', error);
+                        } finally {
+                            if (trackRequestAbortControllerRef.current === controller) {
+                                trackRequestAbortControllerRef.current = null;
+                            }
+                            isTrackRequestInFlightRef.current = false;
                         }
                     }
                 },
@@ -462,11 +537,13 @@ export const useLiveTracking = (
     };
 
     const stopTracking = () => {
+        isTrackingActiveRef.current = false;
         setIsTracking(false);
         setUserLiveLocation(null);
         setLiveDirectionsResponse(null);
         setIsGpsSignalLost(false);
         setIsRouteUpdatesPaused(false);
+        lastApiCallRef.current = 0;
         lastRouteOriginRef.current = null;
         lastRouteCallAtRef.current = 0;
         lastNearbySearchOriginRef.current = null;
@@ -474,6 +551,8 @@ export const useLiveTracking = (
         setNearestHospital(null);
         setNearestPoliceStation(null);
         resetRouteUpdateBackoff();
+        lastDeviationNoticeAtRef.current = 0;
+        abortTrackRequest();
         clearGpsSignalTimeout();
         clearRouteDebounce();
         clearNearbySearchDebounce();
@@ -488,6 +567,7 @@ export const useLiveTracking = (
             if (!isTracking) return;
             setIsRouteUpdatesPaused(true);
             setTrackingError('You are offline. Live route updates are paused.');
+            abortTrackRequest();
         };
 
         const handleOnline = () => {
@@ -495,6 +575,10 @@ export const useLiveTracking = (
             setIsRouteUpdatesPaused(false);
             resetRouteUpdateBackoff();
             setTrackingError(null);
+            if (lastLocationRef.current) {
+                scheduleRouteUpdate(lastLocationRef.current);
+                scheduleNearbySafetyPlacesUpdate(lastLocationRef.current);
+            }
         };
 
         window.addEventListener('offline', handleOffline);
@@ -509,6 +593,9 @@ export const useLiveTracking = (
     // Cleanup tracking on unmount
     useEffect(() => {
         return () => {
+            isTrackingActiveRef.current = false;
+            isMountedRef.current = false;
+            abortTrackRequest();
             clearGpsSignalTimeout();
             clearRouteDebounce();
             clearNearbySearchDebounce();
