@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, Marker, InfoWindow } from '@react-google-maps/api';
 import { MapPin, Navigation, Minimize2, Maximize2 } from 'lucide-react';
 
@@ -16,6 +16,18 @@ interface LiveMapProps {
     setSelectedPlace: (place: google.maps.places.PlaceResult | null) => void;
     isTracking: boolean;
     userLiveLocation: google.maps.LatLngLiteral | null;
+    nearestHospital: {
+        name: string;
+        address: string;
+        distanceMeters: number;
+        location: google.maps.LatLngLiteral;
+    } | null;
+    nearestPoliceStation: {
+        name: string;
+        address: string;
+        distanceMeters: number;
+        location: google.maps.LatLngLiteral;
+    } | null;
     isFullScreen: boolean;
     setIsFullScreen: (isFull: boolean) => void;
 }
@@ -40,9 +52,121 @@ const LiveMap: React.FC<LiveMapProps> = ({
     setSelectedPlace,
     isTracking,
     userLiveLocation,
+    nearestHospital,
+    nearestPoliceStation,
     isFullScreen,
     setIsFullScreen
 }) => {
+    const userMarkerRef = useRef<google.maps.Marker | null>(null);
+    const nearestHospitalMarkerRef = useRef<google.maps.Marker | null>(null);
+    const nearestPoliceMarkerRef = useRef<google.maps.Marker | null>(null);
+
+    useEffect(() => {
+        if (!map || !window.google) return;
+
+        if (!userLiveLocation) {
+            if (userMarkerRef.current) {
+                userMarkerRef.current.setMap(null);
+                userMarkerRef.current = null;
+            }
+            return;
+        }
+
+        if (!userMarkerRef.current) {
+            userMarkerRef.current = new window.google.maps.Marker({
+                map,
+                position: userLiveLocation,
+                icon: {
+                    path: window.google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: '#00d4ff',
+                    fillOpacity: 1,
+                    strokeColor: 'white',
+                    strokeWeight: 2,
+                },
+                zIndex: 100,
+                title: 'Your Current Location',
+            });
+        } else {
+            userMarkerRef.current.setPosition(userLiveLocation);
+        }
+    }, [map, userLiveLocation]);
+
+    useEffect(() => {
+        return () => {
+            if (userMarkerRef.current) {
+                userMarkerRef.current.setMap(null);
+                userMarkerRef.current = null;
+            }
+
+            if (nearestHospitalMarkerRef.current) {
+                nearestHospitalMarkerRef.current.setMap(null);
+                nearestHospitalMarkerRef.current = null;
+            }
+
+            if (nearestPoliceMarkerRef.current) {
+                nearestPoliceMarkerRef.current.setMap(null);
+                nearestPoliceMarkerRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!map || !window.google) return;
+
+        if (!nearestHospital || !isTracking) {
+            if (nearestHospitalMarkerRef.current) {
+                nearestHospitalMarkerRef.current.setMap(null);
+                nearestHospitalMarkerRef.current = null;
+            }
+            return;
+        }
+
+        if (!nearestHospitalMarkerRef.current) {
+            nearestHospitalMarkerRef.current = new window.google.maps.Marker({
+                map,
+                position: nearestHospital.location,
+                icon: {
+                    url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                    scaledSize: new window.google.maps.Size(44, 44),
+                },
+                zIndex: 95,
+                title: nearestHospital.name,
+            });
+        } else {
+            nearestHospitalMarkerRef.current.setPosition(nearestHospital.location);
+            nearestHospitalMarkerRef.current.setTitle(nearestHospital.name);
+        }
+    }, [map, nearestHospital, isTracking]);
+
+    useEffect(() => {
+        if (!map || !window.google) return;
+
+        if (!nearestPoliceStation || !isTracking) {
+            if (nearestPoliceMarkerRef.current) {
+                nearestPoliceMarkerRef.current.setMap(null);
+                nearestPoliceMarkerRef.current = null;
+            }
+            return;
+        }
+
+        if (!nearestPoliceMarkerRef.current) {
+            nearestPoliceMarkerRef.current = new window.google.maps.Marker({
+                map,
+                position: nearestPoliceStation.location,
+                icon: {
+                    url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                    scaledSize: new window.google.maps.Size(44, 44),
+                },
+                zIndex: 95,
+                title: nearestPoliceStation.name,
+            });
+        } else {
+            nearestPoliceMarkerRef.current.setPosition(nearestPoliceStation.location);
+            nearestPoliceMarkerRef.current.setTitle(nearestPoliceStation.name);
+        }
+    }, [map, nearestPoliceStation, isTracking]);
+
     if (showResults && !routeResult) return null;
 
     return (
@@ -66,6 +190,21 @@ const LiveMap: React.FC<LiveMapProps> = ({
                 <div className="absolute top-16 right-4 z-10 bg-green-500/90 backdrop-blur px-3 py-2 rounded-full border border-green-400 flex items-center gap-2 animate-pulse">
                     <div className="w-2 h-2 bg-white rounded-full animate-ping" />
                     <span className="text-xs font-bold text-white">Live Tracking Active</span>
+                </div>
+            )}
+
+            {isTracking && (nearestHospital || nearestPoliceStation) && (
+                <div className="absolute top-28 right-4 z-10 bg-black/70 backdrop-blur px-3 py-2 rounded-xl border border-white/10 space-y-1 max-w-[220px]">
+                    {nearestHospital && (
+                        <p className="text-[11px] text-white/90 truncate">
+                            Hospital: {nearestHospital.name} ({Math.round(nearestHospital.distanceMeters)}m)
+                        </p>
+                    )}
+                    {nearestPoliceStation && (
+                        <p className="text-[11px] text-white/90 truncate">
+                            Police: {nearestPoliceStation.name} ({Math.round(nearestPoliceStation.distanceMeters)}m)
+                        </p>
+                    )}
                 </div>
             )}
 
@@ -181,23 +320,6 @@ const LiveMap: React.FC<LiveMapProps> = ({
                                     </div>
                                 </div>
                             </InfoWindow>
-                        )}
-
-                        {/* Live Location Marker */}
-                        {userLiveLocation && (
-                            <Marker
-                                position={userLiveLocation}
-                                icon={{
-                                    path: window.google.maps.SymbolPath.CIRCLE,
-                                    scale: 8,
-                                    fillColor: "#00d4ff",
-                                    fillOpacity: 1,
-                                    strokeColor: "white",
-                                    strokeWeight: 2,
-                                }}
-                                zIndex={100} // Keep on top
-                                title="Your Current Location"
-                            />
                         )}
                     </GoogleMap>
                 ) : (

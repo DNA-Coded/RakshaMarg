@@ -202,6 +202,12 @@ const CheckRoute = () => {
   const {
     isTracking,
     userLiveLocation,
+    liveDirectionsResponse,
+    trackingError,
+    isGpsSignalLost,
+    isRouteUpdatesPaused,
+    nearestHospital,
+    nearestPoliceStation,
     startTracking,
     stopTracking
   } = useLiveTracking(
@@ -209,7 +215,8 @@ const CheckRoute = () => {
     fromLocation,
     toLocation,
     notifyTrustedContacts,
-    () => handleCheckRoute(fromLocation, toLocation)
+    () => handleCheckRoute(fromLocation, toLocation),
+    map
   );
 
   const [sosActive, setSosActive] = useState(false);
@@ -266,7 +273,7 @@ const CheckRoute = () => {
       map={map}
       onLoad={onLoad}
       onUnmount={onUnmount}
-      directionsResponse={directionsResponse}
+      directionsResponse={liveDirectionsResponse || directionsResponse}
       routeResult={routeResult}
       showResults={showResults}
       policeStations={policeStations}
@@ -275,6 +282,8 @@ const CheckRoute = () => {
       setSelectedPlace={setSelectedPlace}
       isTracking={isTracking}
       userLiveLocation={userLiveLocation}
+      nearestHospital={nearestHospital}
+      nearestPoliceStation={nearestPoliceStation}
       isFullScreen={isFullScreen}
       setIsFullScreen={setIsFullScreen}
     />
@@ -364,6 +373,11 @@ const CheckRoute = () => {
                   trustedContacts={trustedContacts}
                   setShowContactModal={setShowContactModal}
                   isTracking={isTracking}
+                  trackingError={trackingError}
+                  isGpsSignalLost={isGpsSignalLost}
+                  isRouteUpdatesPaused={isRouteUpdatesPaused}
+                  nearestHospital={nearestHospital}
+                  nearestPoliceStation={nearestPoliceStation}
                   startTracking={startTracking}
                   stopTracking={stopTracking}
                   handleShareLocation={handleShareLocation}

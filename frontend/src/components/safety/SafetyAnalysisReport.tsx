@@ -10,6 +10,19 @@ interface SafetyAnalysisReportProps {
     trustedContacts: any[];
     setShowContactModal: (show: boolean) => void;
     isTracking: boolean;
+    trackingError: string | null;
+    isGpsSignalLost: boolean;
+    isRouteUpdatesPaused: boolean;
+    nearestHospital: {
+        name: string;
+        address: string;
+        distanceMeters: number;
+    } | null;
+    nearestPoliceStation: {
+        name: string;
+        address: string;
+        distanceMeters: number;
+    } | null;
     startTracking: () => void;
     stopTracking: () => void;
     handleShareLocation: () => void;
@@ -34,6 +47,11 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     trustedContacts,
     setShowContactModal,
     isTracking,
+    trackingError,
+    isGpsSignalLost,
+    isRouteUpdatesPaused,
+    nearestHospital,
+    nearestPoliceStation,
     startTracking,
     stopTracking,
     handleShareLocation,
@@ -308,6 +326,29 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
             </Button>
 
             {/* Route Tracking Controls */}
+            {(trackingError || isGpsSignalLost || isRouteUpdatesPaused) && (
+                <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-yellow-200">Tracking Status</p>
+                    <p className="mt-1 text-sm text-yellow-100/90">
+                        {trackingError || (isGpsSignalLost ? 'GPS signal is currently weak.' : 'Live route updates are paused.')}
+                    </p>
+                </div>
+            )}
+
+            {isTracking && (
+                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-white/60">Nearest Live Support</p>
+                    <div className="mt-2 space-y-2">
+                        <p className="text-sm text-white/85">
+                            Hospital: {nearestHospital ? `${nearestHospital.name} (${Math.round(nearestHospital.distanceMeters)}m)` : 'No nearby hospital found'}
+                        </p>
+                        <p className="text-sm text-white/85">
+                            Police: {nearestPoliceStation ? `${nearestPoliceStation.name} (${Math.round(nearestPoliceStation.distanceMeters)}m)` : 'No nearby police station found'}
+                        </p>
+                    </div>
+                </div>
+            )}
+
             <div className="flex gap-3">
                 <Button
                     onClick={isTracking ? stopTracking : startTracking}
