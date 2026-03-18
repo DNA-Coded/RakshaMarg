@@ -396,7 +396,22 @@ export const useRouteSafety = () => {
                 for (const point of limitedSamplePoints) {
                     try {
                         const policeResults = await searchAtPoint(point, 'police');
-                        policeResults.forEach(p => {
+                        
+                        // Sort by user ratings to prioritize major stations and filter out small ones
+                        const majorStations = policeResults
+                            .filter(p => {
+                                const nameLower = (p.name || '').toLowerCase();
+                                const isMinor = nameLower.includes('chowki') || 
+                                                nameLower.includes('booth') || 
+                                                nameLower.includes('beat') || 
+                                                nameLower.includes('post') ||
+                                                nameLower.includes('traffic');
+                                return !isMinor;
+                            })
+                            .sort((a, b) => (b.user_ratings_total || 0) - (a.user_ratings_total || 0))
+                            .slice(0, 3); // Take the top 3 major station per 5km sample point to reduce clutter while ensuring visibility
+
+                        majorStations.forEach(p => {
                             if (p.place_id && !uniquePolice.has(p.place_id)) uniquePolice.set(p.place_id, p);
                         });
                     } catch (e) { console.error(e); }

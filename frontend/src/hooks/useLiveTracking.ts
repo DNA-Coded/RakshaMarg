@@ -96,10 +96,12 @@ export const useLiveTracking = (
     const [isRouteUpdatesPaused, setIsRouteUpdatesPaused] = useState(false);
     const [nearestHospital, setNearestHospital] = useState<NearbySafetyPlace | null>(null);
     const [nearestPoliceStation, setNearestPoliceStation] = useState<NearbySafetyPlace | null>(null);
+    const [userBearing, setUserBearing] = useState<number>(0);
 
     const watchIdRef = useRef<number | null>(null);
     const lastApiCallRef = useRef<number>(0);
     const lastRouteOriginRef = useRef<google.maps.LatLngLiteral | null>(null);
+    const lastLocationRef = useRef<google.maps.LatLngLiteral | null>(null);
     const lastRouteCallAtRef = useRef<number>(0);
     const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
     const routeUpdateDebounceRef = useRef<number | null>(null);
@@ -347,11 +349,28 @@ export const useLiveTracking = (
         if (navigator.geolocation) {
             const id = navigator.geolocation.watchPosition(
                 async (position) => {
-                    const { latitude, longitude } = position.coords;
+                    const { latitude, longitude, heading } = position.coords;
                     const currentLocation = { lat: latitude, lng: longitude };
+
+                    // Calculate bearing if heading is not provided by device
+                    let currentBearing = heading || 0;
+                    if (heading === null && lastLocationRef.current && window.google) {
+                        try {
+                           currentBearing = window.google.maps.geometry.spherical.computeHeading(
+                                lastLocationRef.current,
+                                currentLocation
+                            );
+                        } catch (e) {
+                             currentBearing = userBearing;
+                        }
+                    }
 
                     // Instant UI Update
                     setUserLiveLocation(currentLocation);
+                    if (currentBearing !== null && !isNaN(currentBearing)) {
+                         setUserBearing(currentBearing);
+                    }
+                    lastLocationRef.current = currentLocation;
                     map?.panTo(currentLocation);
                     setIsGpsSignalLost(false);
                     armGpsSignalTimeout();
@@ -508,6 +527,7 @@ export const useLiveTracking = (
         isRouteUpdatesPaused,
         nearestHospital,
         nearestPoliceStation,
+        userBearing,
         startTracking,
         stopTracking
     };
