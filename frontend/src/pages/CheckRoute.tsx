@@ -7,8 +7,10 @@ import TrustedContactsModal from '../components/safety/TrustedContactsModal';
 import RouteInputForm from '../components/map/RouteInputForm';
 import { useLiveTracking } from '../hooks/useLiveTracking';
 import { useRouteSafety } from '../hooks/useRouteSafety';
+import { useSmartSafetyMode, useEmergencyResponse } from '../hooks/useSafetyAssistant';
 import LiveMap from '../components/map/LiveMap';
 import SafetyAnalysisReport from '../components/safety/SafetyAnalysisReport';
+import { useRouteContext } from '../context/RouteContext';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
 import { Button } from '@/components/ui/button';
@@ -56,6 +58,9 @@ const CheckRoute = () => {
     handleCheckRoute
   } = useRouteSafety();
 
+  // Route Context for Chatbot Integration
+  const { setRouteData, clearRouteData } = useRouteContext();
+
   const [originAutocomplete, setOriginAutocomplete] = useState<any>(null);
   const [destAutocomplete, setDestAutocomplete] = useState<any>(null);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -69,6 +74,31 @@ const CheckRoute = () => {
     const saved = localStorage.getItem('raksha_trusted_contacts');
     if (saved) setTrustedContacts(JSON.parse(saved));
   }, []);
+
+  // Update Route Context for Chatbot Integration
+  useEffect(() => {
+    if (routeResult && fromLocation && toLocation) {
+      const currentHour = new Date().getHours();
+      const isNightTime = currentHour < 5 || currentHour > 21;
+
+      setRouteData({
+        origin: fromLocation,
+        destination: toLocation,
+        safetyScore: routeResult.safetyScore || null,
+        riskLevel: 
+          (routeResult.safetyScore || 0) >= 70 ? 'Low Risk' :
+          (routeResult.safetyScore || 0) >= 50 ? 'Moderate Risk' :
+          'High Risk',
+        incidents: routeResult.incidents || [],
+        nearestHospital: hospitals && hospitals.length > 0 ? hospitals[0] : null,
+        nearestPolice: policeStations && policeStations.length > 0 ? policeStations[0] : null,
+        isNightTime,
+        routes: allRoutes || [],
+      });
+    } else if (!routeResult) {
+      clearRouteData();
+    }
+  }, [routeResult, fromLocation, toLocation, hospitals, policeStations, allRoutes, setRouteData, clearRouteData]);
 
   const addContact = (name: string, phone: string) => {
     const updated = [...trustedContacts, { name, phone }];
@@ -245,6 +275,46 @@ const CheckRoute = () => {
 
   const [sosActive, setSosActive] = useState(false);
   const [isSosSending, setIsSosSending] = useState(false);
+
+  // Smart Safety Mode
+  const [smartSafetyEnabled, setSmartSafetyEnabled] = useState(false);
+  const { safetyAlerts, isMonitoring, toggleMonitoring } = useSmartSafetyMode(
+    smartSafetyEnabled && isTracking,
+    {
+      activeRoute: routeResult,
+      currentLocation: userLiveLocation || initialCoordinates,
+      destination: toLocation,
+      nearbyPlaces: { hospitals, policeStations }
+    }
+  );
+
+  // Emergency Response
+  const { isEmergency, emergencyGuidance, triggerEmergency, clearEmergency } = useEmergencyResponse();
+
+  // Journey context for ChatAssistant
+  const journeyContext = {
+    currentLocation: userLiveLocation || initialCoordinates ? {
+      lat: (userLiveLocation || initialCoordinates)?.lat || 0,
+      lng: (userLiveLocation || initialCoordinates)?.lng || 0,
+      address: fromLocation
+    } : undefined,
+    destination: toLocation ? {
+      address: toLocation,
+      lat: 0,
+      lng: 0
+    } : undefined,
+    activeRoute: routeResult ? {
+      summary: routeResult.summary,
+      safetyScore: routeResult.safetyScore || 0,
+      duration: routeResult.duration || 'N/A'
+    } : undefined,
+    nearbyPlaces: {
+      hospitals: hospitals || [],
+      policeStations: policeStations || []
+    },
+    currentTime: new Date().toISOString(),
+    isNightTime: new Date().getHours() < 5 || new Date().getHours() > 21
+  };
 
   const handleSOS = async () => {
     if (sosActive || isSosSending) return;

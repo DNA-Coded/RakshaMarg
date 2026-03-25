@@ -1,0 +1,150 @@
+/* Nirvhaya Popup - Floating Chatbot Styling */
+
+/* Floating Button Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(168, 85, 247, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px) translateX(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0) scale(1);
+  }
+}
+
+@keyframes fade-in-overlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Nirvhaya Button Hover Effect */
+.nirvhaya-button:hover {
+  animation: pulse-ring 1.5s infinite;
+}
+
+.nirvhaya-button {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Popup Container Animation */
+.nirvhaya-popup.open {
+  animation: slide-up 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Overlay Animation */
+.nirvhaya-overlay.open {
+  animation: fade-in-overlay 0.3s ease-out;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 640px) {
+  .nirvhaya-popup {
+    max-height: 100vh !important;
+    width: 100vw !important;
+    border-radius: 20px 20px 0 0 !important;
+  }
+}
+
+/* Header Gradient Animation */
+.nirvhaya-header {
+  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Notification Badge Animation */
+.nirvhaya-badge {
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Chat Message Animation */
+.nirvhaya-message {
+  animation: messageSlide 0.3s ease-out;
+}
+
+@keyframes messageSlide {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Smooth Transitions */
+.nirvhaya-transition {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Loading Spinner */
+.nirvhaya-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Focus States for Accessibility */
+.nirvhaya-button:focus-visible {
+  outline: 2px solid #ec4899;
+  outline-offset: 2px;
+}
+
+.nirvhaya-close-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}

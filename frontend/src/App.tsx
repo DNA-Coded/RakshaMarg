@@ -8,6 +8,8 @@ import { HelmetProvider } from "react-helmet-async";
 import { ReactLenis } from '@studio-freight/react-lenis';
 
 import ScrollToAnchor from "./components/ScrollToAnchor";
+import { NirvhayaPopup } from "./components/NirvhayaPopup";
+import { RouteProvider } from "./context/RouteContext";
 
 const Index = lazy(() => import("./pages/Index"));
 const CheckRoute = lazy(() => import("./pages/CheckRoute"));
@@ -47,19 +49,22 @@ const App = () => {
           </Routes>
         </Suspense>
       </BrowserRouter>
+      <NirvhayaPopup />
     </TooltipProvider>
   );
 
   return (
     <HelmetProvider>
       <QueryClientProvider client={queryClient}>
-        {isMobile ? (
-          content
-        ) : (
-          <ReactLenis root options={{ lerp: 0.1, duration: 1.5, smoothWheel: true }}>
-            {content}
-          </ReactLenis>
-        )}
+        <RouteProvider>
+          {isMobile ? (
+            content
+          ) : (
+            <ReactLenis root options={{ lerp: 0.1, duration: 1.5, smoothWheel: true }}>
+              {content}
+            </ReactLenis>
+          )}
+        </RouteProvider>
       </QueryClientProvider>
     </HelmetProvider>
   );
