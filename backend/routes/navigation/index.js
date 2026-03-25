@@ -1,5 +1,6 @@
 import { mapsService } from '../../services/mapsService.js';
 import { geminiService } from '../../services/geminiService.js';
+import { safetyAssistant } from '../../services/safetyAssistant.js';
 import { safetyRouteController } from '../../controllers/safetyRouteController.js';
 import { incidentDetailsController } from '../../controllers/incidentDetailsController.js';
 // import { firebaseService } from '../../services/firebase.js';
@@ -330,4 +331,268 @@ export default async function (fastify, opts) {
         },
         onRequest: [fastify.verifyApiKey]
     }, incidentDetailsController.getDetails);
+
+    // ============================================
+    // MargRakshak Safety Assistant Routes
+    // ============================================
+
+    // POST /chat - Chat with Nirbhaya AI Safety Assistant
+    fastify.post('/chat', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['message'],
+                properties: {
+                    message: {
+                        type: 'string',
+                        description: 'User message to Nirbhaya'
+                    },
+                    conversationHistory: {
+                        type: 'array',
+                        description: 'Previous conversation history',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                role: { type: 'string', enum: ['user', 'assistant'] },
+                                content: { type: 'string' }
+                            }
+                        }
+                    },
+                    journeyContext: {
+                        type: 'object',
+                        description: 'Current journey context',
+                        properties: {
+                            currentLocation: {
+                                type: 'object',
+                                properties: {
+                                    address: { type: 'string' },
+                                    lat: { type: 'number' },
+                                    lng: { type: 'number' }
+                                }
+                            },
+                            destination: {
+                                type: 'object',
+                                properties: {
+                                    address: { type: 'string' },
+                                    lat: { type: 'number' },
+                                    lng: { type: 'number' }
+                                }
+                            },
+                            activeRoute: {
+                                type: 'object',
+                                properties: {
+                                    summary: { type: 'string' },
+                                    safetyScore: { type: 'number' },
+                                    duration: { type: 'string' }
+                                }
+                            },
+                            nearbyPlaces: {
+                                type: 'object',
+                                properties: {
+                                    hospitals: { type: 'array' },
+                                    policeStations: { type: 'array' }
+                                }
+                            },
+                            currentTime: { type: 'string' },
+                            isNightTime: { type: 'boolean' }
+                        }
+                    }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        response: { type: 'string' },
+                        isEmergency: { type: 'boolean' },
+                        isAnxiety: { type: 'boolean' },
+                        isSafetyInquiry: { type: 'boolean' },
+                        suggestedActions: { type: 'array' },
+                        timestamp: { type: 'string' }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        try {
+            const { message, conversationHistory = [], journeyContext = {} } = request.body;
+
+            if (!message || message.trim().length === 0) {
+                return reply.code(400).send({
+                    error: 'Invalid message',
+                    message: 'Message cannot be empty'
+                });
+            }
+
+            // Proxy request to Python Nirbhaya service
+            const nirbhayaUrl = process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001';
+            const apiKey = process.env.APP_API_KEY;
+
+            const response = await fetch(`${nirbhayaUrl}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    message,
+                    conversationHistory,
+                    journeyContext
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                return reply.code(response.status).send({
+                    error: 'Nirbhaya service error',
+                    message: errorData.detail || 'Failed to get response from Nirbhaya'
+                });
+            }
+
+            const result = await response.json();
+            return result;
+
+        } catch (error) {
+            console.error('Chat endpoint error:', error.message);
+            console.error('Failed URL:', `${process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001'}/chat`);
+            console.error('Error details:', error);
+            return reply.code(500).send({
+                error: 'Chat processing failed',
+                message: `Failed to connect to Nirbhaya service on ${process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001'}. Ensure Python service is running. Error: ${error.message}`
+            });
+        }
+    });
+
+    // POST /emergency - Handle emergency situations
+    fastify.post('/emergency', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['message'],
+                properties: {
+                    message: { type: 'string', description: 'Emergency situation description' },
+                    journeyContext: { type: 'object' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object'
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        try {
+            const { message, journeyContext = {} } = request.body;
+
+            // Get emergency guidance from safety assistant
+            const emergencyGuidance = safetyAssistant.handleEmergency(message, journeyContext);
+
+            return {
+                status: 'emergency_detected',
+                guidance: emergencyGuidance,
+                timestamp: new Date().toISOString(),
+                reminder: 'Call 100 (India) for immediate police assistance'
+            };
+        } catch (error) {
+            console.error('Emergency endpoint error:', error);
+            return reply.code(500).send({
+                error: 'Emergency handling failed',
+                message: error.message
+            });
+        }
+    });
+
+    // POST /analyze-journey - Analyze journey for safety risks (Smart Safety Mode)
+    fastify.post('/analyze-journey', {
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    route: {
+                        type: 'object',
+                        properties: {
+                            summary: { type: 'string' }
+                        }
+                    },
+                    currentTime: { type: 'string' },
+                    userLocation: {
+                        type: 'object',
+                        properties: {
+                            lat: { type: 'number' },
+                            lng: { type: 'number' }
+                        }
+                    },
+                    destination: {
+                        type: 'object',
+                        properties: {
+                            lat: { type: 'number' },
+                            lng: { type: 'number' }
+                        }
+                    },
+                    areasOfConcern: {
+                        type: 'array',
+                        items: { type: 'string' }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        try {
+            const journeyData = request.body;
+
+            const analysis = await safetyAssistant.analyzeJourneyRisks(journeyData);
+
+            return {
+                ...analysis,
+                smartSafetyMode: true
+            };
+        } catch (error) {
+            console.error('Journey analysis error:', error);
+            return reply.code(500).send({
+                error: 'Analysis failed',
+                message: error.message
+            });
+        }
+    });
+
+    // GET /time-based-risk - Get time-based risk warning for location
+    fastify.get('/time-based-risk', {
+        schema: {
+            querystring: {
+                type: 'object',
+                required: ['lat', 'lng'],
+                properties: {
+                    lat: { type: 'number' },
+                    lng: { type: 'number' },
+                    time: { type: 'string', description: 'ISO timestamp (defaults to current)' }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        try {
+            const { lat, lng, time = new Date().toISOString() } = request.query;
+
+            // Create location object
+            const location = { lat: parseFloat(lat), lng: parseFloat(lng) };
+
+            // Get time-based risk warning
+            const warning = safetyAssistant.getTimBasedRiskWarning(location, time, {});
+
+            return {
+                location,
+                time,
+                ...warning
+            };
+        } catch (error) {
+            console.error('Time-based risk check error:', error);
+            return reply.code(500).send({
+                error: 'Risk assessment failed',
+                message: error.message
+            });
+        }
+    });
 }
