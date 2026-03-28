@@ -2,8 +2,13 @@ import axios from 'axios';
 
 import { API_BASE_URL, API_KEY } from '../config';
 
+const getBaseUrl = () => {
+    const base = API_BASE_URL.replace(/\/$/, "");
+    return base.endsWith('/api/v1/navigation') ? base : `${base}/api/v1/navigation`;
+};
+
 const api = axios.create({
-    baseURL: API_BASE_URL,
+    baseURL: getBaseUrl(),
     headers: {
         'x-api-key': API_KEY,
         'Content-Type': 'application/json',
