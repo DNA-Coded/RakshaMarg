@@ -234,18 +234,61 @@ export const safetyAssistant = {
       };
     } catch (error) {
       console.error('Nirbhaya Chat Error:', error);
-      return {
-        response: "I'm experiencing a temporary issue. For immediate safety concerns, please call emergency services or activate SOS.",
-        isEmergency,
-        isAnxiety,
-        isSafetyInquiry,
-        suggestedActions: isEmergency ? [
+
+      const safetyScore = journeyContext?.activeRoute?.safetyScore;
+      const timeHint = journeyContext?.isNightTime
+        ? 'It is currently night, so please stay on well-lit roads and avoid isolated shortcuts.'
+        : 'Stay on active main roads and keep sharing your live location.';
+
+      const scoreHint = typeof safetyScore === 'number'
+        ? `Your current route safety score is ${Math.round(safetyScore)}/100.`
+        : 'I could not access full route scoring right now.';
+
+      let fallbackResponse = `${scoreHint} ${timeHint}`;
+
+      if (isEmergency) {
+        fallbackResponse = 'I detected a possible emergency. Activate SOS now, move to a crowded or well-lit area, and call emergency services (100 in India). Keep your phone unlocked and location sharing on.';
+      } else if (isAnxiety) {
+        fallbackResponse = `${scoreHint} You are not alone. Take slow breaths, stay in populated areas, and share your live location with a trusted contact right now.`;
+      } else if (isSafetyInquiry) {
+        fallbackResponse = `${scoreHint} Choose routes with better lighting, more people, and nearby police or hospital access. ${timeHint}`;
+      }
+
+      let suggestedActions = [];
+      if (isEmergency) {
+        suggestedActions = [
           {
             type: 'SOS',
             label: 'ACTIVATE SOS',
             priority: 'CRITICAL'
+          },
+          {
+            type: 'EMERGENCY_SERVICES',
+            label: 'Call Emergency Services',
+            priority: 'CRITICAL'
           }
-        ] : [],
+        ];
+      } else if (isAnxiety || isSafetyInquiry) {
+        suggestedActions = [
+          {
+            type: 'SAFE_ROUTE',
+            label: 'Verify Route Safety',
+            priority: 'HIGH'
+          },
+          {
+            type: 'TRUSTED_CONTACTS',
+            label: 'Share with Trusted Contact',
+            priority: 'MEDIUM'
+          }
+        ];
+      }
+
+      return {
+        response: fallbackResponse,
+        isEmergency,
+        isAnxiety,
+        isSafetyInquiry,
+        suggestedActions,
         error: 'CHAT_ERROR',
         errorDetails: error.message
       };
