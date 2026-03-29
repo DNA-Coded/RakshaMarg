@@ -125,6 +125,7 @@ graph TD
 
 *   [**Frontend Documentation**](./frontend/README.md) - Setup, and directory structure.
 *   [**Backend Documentation**](./backend/README.md) - API endpoints and server setup.
+*   [**Deployment Guide (Vercel + Render)**](./DEPLOYMENT.md) - Production deployment steps.
 
 ---
 

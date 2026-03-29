@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: rakshamarg-backend
+    runtime: node
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: APP_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NIRBHAYA_SERVICE_URL
+        sync: false
