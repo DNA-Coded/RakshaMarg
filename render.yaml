@@ -23,13 +23,17 @@ services:
     name: rakshamarg-chatbot
     runtime: python
     rootDir: nirbhaya_bot
-    buildCommand: pip install -r requirements.txt
+    buildCommand: python -m pip install --upgrade pip setuptools wheel && python -m pip install --no-cache-dir --retries 10 --timeout 120 -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     autoDeploy: true
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+      - key: PIP_DEFAULT_TIMEOUT
+        value: 120
+      - key: PIP_DISABLE_PIP_VERSION_CHECK
+        value: 1
       - key: API_KEY
         sync: false
       - key: GEMINI_API_KEY
