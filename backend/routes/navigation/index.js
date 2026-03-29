@@ -416,7 +416,7 @@ export default async function (fastify, opts) {
         onRequest: [fastify.verifyApiKey]
     }, async (request, reply) => {
         try {
-            const { message, conversationHistory = [], journeyContext = {} } = request.body;
+            const { message, conversationHistory = [], journeyContext = {}, routeContext } = request.body;
 
             if (!message || message.trim().length === 0) {
                 return reply.code(400).send({
@@ -431,7 +431,19 @@ export default async function (fastify, opts) {
             const requestPayload = {
                 message,
                 conversationHistory,
-                journeyContext
+                journeyContext,
+                routeContext
+            };
+
+            const fallbackToNodeAssistant = async (reason) => {
+                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext);
+                return {
+                    ...fallbackResult,
+                    meta: {
+                        provider: 'node-fallback',
+                        reason
+                    }
+                };
             };
 
             const callNirbhaya = async () => fetch(`${nirbhayaUrl}/chat`, {
@@ -451,6 +463,10 @@ export default async function (fastify, opts) {
             }
 
             if (!response.ok) {
+                if (response.status >= 500) {
+                    return await fallbackToNodeAssistant(`upstream_${response.status}`);
+                }
+
                 let errorData = null;
                 let rawBody = '';
 
@@ -494,10 +510,24 @@ export default async function (fastify, opts) {
             console.error('Chat endpoint error:', error.message);
             console.error('Failed URL:', `${process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001'}/chat`);
             console.error('Error details:', error);
-            return reply.code(500).send({
-                error: 'Chat processing failed',
-                message: `Failed to connect to Nirbhaya service on ${process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001'}. Ensure Python service is running. Error: ${error.message}`
-            });
+
+            try {
+                const { message, conversationHistory = [], journeyContext = {} } = request.body;
+                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext);
+                return {
+                    ...fallbackResult,
+                    meta: {
+                        provider: 'node-fallback',
+                        reason: 'connection_error'
+                    }
+                };
+            } catch (fallbackError) {
+                return reply.code(500).send({
+                    error: 'Chat processing failed',
+                    message: `Failed to connect to Nirbhaya service on ${process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001'}. Ensure Python service is running. Error: ${error.message}`,
+                    fallbackError: fallbackError.message
+                });
+            }
         }
     });
 
