@@ -25,7 +25,10 @@ export default fp(async (fastify, opts) => {
 
         // Check against the configured API Key
         if (!apiKey || apiKey !== config.appApiKey) {
-            throw new Error('Invalid or Missing API Key');
+            return reply.code(401).send({
+                error: 'Unauthorized',
+                message: 'Invalid or Missing API Key'
+            });
         }
     });
 });
