@@ -428,19 +428,27 @@ export default async function (fastify, opts) {
             // Proxy request to Python Nirbhaya service
             const nirbhayaUrl = process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001';
             const apiKey = process.env.APP_API_KEY;
+            const requestPayload = {
+                message,
+                conversationHistory,
+                journeyContext
+            };
 
-            const response = await fetch(`${nirbhayaUrl}/chat`, {
+            const callNirbhaya = async () => fetch(`${nirbhayaUrl}/chat`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': apiKey
                 },
-                body: JSON.stringify({
-                    message,
-                    conversationHistory,
-                    journeyContext
-                })
+                body: JSON.stringify(requestPayload)
             });
+
+            // Render free tier may cold-start the chatbot and briefly return 502/503.
+            let response = await callNirbhaya();
+            if (!response.ok && [502, 503, 504].includes(response.status)) {
+                await new Promise((resolve) => setTimeout(resolve, 2500));
+                response = await callNirbhaya();
+            }
 
             if (!response.ok) {
                 let errorData = null;

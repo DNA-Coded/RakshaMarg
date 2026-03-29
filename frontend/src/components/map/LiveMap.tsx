@@ -129,7 +129,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
                 map,
                 position: nearestHospital.location,
                 icon: {
-                    url: 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                    url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
                     scaledSize: new window.google.maps.Size(44, 44),
                 },
                 zIndex: 95,
@@ -157,7 +157,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
                 map,
                 position: nearestPoliceStation.location,
                 icon: {
-                    url: 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                    url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
                     scaledSize: new window.google.maps.Size(44, 44),
                 },
                 zIndex: 95,
@@ -233,15 +233,6 @@ const LiveMap: React.FC<LiveMapProps> = ({
                             mapId: '4f6ea60a12e3432',
                             disableDefaultUI: true,
                             zoomControl: true,
-                            styles: [
-                                { elementType: "geometry", stylers: [{ color: "#242f3e" }] },
-                                { elementType: "labels.text.stroke", stylers: [{ color: "#242f3e" }] },
-                                { elementType: "labels.text.fill", stylers: [{ color: "#746855" }] },
-                                { featureType: "road", elementType: "geometry", stylers: [{ color: "#38414e" }] },
-                                { featureType: "road", elementType: "geometry.stroke", stylers: [{ color: "#212a37" }] },
-                                { featureType: "road", elementType: "labels.text.fill", stylers: [{ color: "#9ca5b3" }] },
-                                { featureType: "water", elementType: "geometry", stylers: [{ color: "#17263c" }] },
-                            ],
                         }}
                     >
                         <DirectionsRenderer
@@ -279,7 +270,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
                                     key={`police-${idx}`}
                                     position={station.geometry.location}
                                     icon={{
-                                        url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png",
+                                        url: "https://maps.google.com/mapfiles/ms/icons/blue-dot.png",
                                         scaledSize: new window.google.maps.Size(40, 40)
                                     }}
                                     onClick={() => setSelectedPlace(station)}
@@ -294,7 +285,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
                                     key={`hospital-${idx}`}
                                     position={hospital.geometry.location}
                                     icon={{
-                                        url: "http://maps.google.com/mapfiles/ms/icons/red-dot.png",
+                                        url: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
                                         scaledSize: new window.google.maps.Size(40, 40)
                                     }}
                                     onClick={() => setSelectedPlace(hospital)}
