@@ -1,58 +1,215 @@
-# Deployment Guide (Vercel + Render)
+# Deployment Guide (Vercel Frontend + Render Backend + Render Chatbot)
 
-This repository is set up for split deployment:
+This guide is for manual deployment on free tier, without using Render Blueprint automation.
 
-- Frontend: Vercel
-- Backend API: Render
-- Chatbot service: Render
+## Target Architecture
 
-## 1) Deploy Backend + Chatbot to Render
+- Frontend (React/Vite): Vercel
+- Backend API (Node/Fastify): Render Web Service
+- Chatbot API (Python/FastAPI): Render Web Service
 
-1. Push this repository to GitHub.
-2. In Render, create services from this repository using the blueprint in render.yaml.
-3. This creates two web services:
-   - rakshamarg-backend (Node/Fastify)
-   - rakshamarg-chatbot (Python/FastAPI)
-4. Set environment variables for rakshamarg-chatbot:
-   - API_KEY (must match backend APP_API_KEY)
+Production request flow:
+
+1. Browser calls frontend on Vercel.
+2. Frontend calls backend on Render.
+3. Backend proxies chat requests to chatbot on Render.
+
+## Prerequisites
+
+Before starting, keep these ready:
+
+- GitHub repository with latest main branch.
+- One shared secret value for API auth.
+- Google Maps API key for backend.
+- Gemini API key for backend and chatbot.
+- Optional OpenAI API key if chatbot provider is openai.
+
+Recommended naming for shared secret:
+
+- SHARED_APP_KEY: any long random string
+
+You will use this same value in:
+
+- backend APP_API_KEY
+- chatbot API_KEY
+- frontend VITE_API_KEY
+
+## Environment Variable Mapping
+
+Use this exact mapping:
+
+- Backend (Render)
+  - APP_API_KEY = SHARED_APP_KEY
+  - GOOGLE_MAPS_API_KEY = your Google Maps server key
+  - GEMINI_API_KEY = your Gemini key
+  - NIRBHAYA_SERVICE_URL = chatbot service URL from Render
+- Chatbot (Render)
+  - API_KEY = SHARED_APP_KEY
+  - GEMINI_API_KEY = your Gemini key
+  - OPENAI_API_KEY = optional
+  - LLM_PROVIDER = gemini or openai
+- Frontend (Vercel)
+  - VITE_API_BASE_URL = backend service URL from Render (no trailing slash)
+  - VITE_API_KEY = SHARED_APP_KEY
+  - VITE_GOOGLE_MAPS_API_KEY = browser Maps key
+
+## Step 1: Deploy Chatbot Service on Render
+
+Deploy chatbot first so backend can reference its URL.
+
+In Render:
+
+1. New + > Web Service
+2. Connect your GitHub repository
+3. Configure service
+   - Name: rakshamarg-chatbot
+   - Runtime: Python 3
+   - Region: choose closest to users
+   - Branch: main
+   - Root Directory: nirbhaya_bot
+   - Build Command: pip install -r requirements.txt
+   - Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT
+   - Health Check Path: /health
+4. Add environment variables
+   - API_KEY
    - GEMINI_API_KEY
-   - OPENAI_API_KEY (optional, only if LLM_PROVIDER=openai)
-   - LLM_PROVIDER (default: gemini)
-5. Set environment variables for rakshamarg-backend:
-   - APP_API_KEY
+   - OPENAI_API_KEY (only if needed)
+   - LLM_PROVIDER (gemini recommended)
+5. Create Web Service and wait for first successful deploy
+6. Copy service URL, for example
+   - https://rakshamarg-chatbot.onrender.com
+
+Quick verification:
+
+- Open https://your-chatbot-url/health
+- Expected JSON includes status healthy
+
+## Step 2: Deploy Backend Service on Render
+
+After chatbot is live, deploy backend.
+
+In Render:
+
+1. New + > Web Service
+2. Connect the same GitHub repository
+3. Configure service
+   - Name: rakshamarg-backend
+   - Runtime: Node
+   - Region: same as chatbot if possible
+   - Branch: main
+   - Root Directory: leave empty (repository root)
+   - Build Command: npm install
+   - Start Command: npm start
+   - Health Check Path: /health
+4. Add environment variables
+   - APP_API_KEY = same exact value as chatbot API_KEY
    - GOOGLE_MAPS_API_KEY
    - GEMINI_API_KEY
-   - NIRBHAYA_SERVICE_URL = chatbot Render URL (for example: https://rakshamarg-chatbot.onrender.com)
-6. Deploy and copy your backend URL, for example:
+   - NIRBHAYA_SERVICE_URL = https://your-chatbot-url
+5. Create Web Service and wait for healthy deploy
+6. Copy backend URL, for example
    - https://rakshamarg-backend.onrender.com
 
-## 2) Deploy Frontend to Vercel
+Quick verification:
 
-1. Import this GitHub repository in Vercel.
-2. Keep the repository root as project root (vercel.json handles the frontend build).
-3. In Vercel Project Settings, add environment variables:
-   - VITE_API_BASE_URL = your Render backend URL (no trailing slash)
-   - VITE_API_KEY = same value as APP_API_KEY on backend
-   - VITE_GOOGLE_MAPS_API_KEY = browser key for Google Maps
-4. Deploy.
+- Open https://your-backend-url/health
+- Expected JSON includes status ok
 
-## 3) Verify Production
+## Step 3: Deploy Frontend on Vercel
 
-1. Open your frontend URL on Vercel.
-2. Test backend health endpoint directly:
-   - GET /health on your Render URL
-3. Test chatbot health endpoint directly:
-   - GET /health on chatbot Render URL
-4. In the app, test route lookup and chatbot flow.
-4. If requests fail, confirm:
-   - VITE_API_BASE_URL points to Render
-   - VITE_API_KEY matches APP_API_KEY
-   - chatbot API_KEY matches backend APP_API_KEY
-   - NIRBHAYA_SERVICE_URL points to chatbot Render URL
-   - Render service logs show no missing env vars
+The repository already contains vercel.json configured to build frontend and serve SPA routes.
+
+In Vercel:
+
+1. Add New Project
+2. Import same GitHub repository
+3. Keep default root as repository root
+4. In Environment Variables, add:
+   - VITE_API_BASE_URL = https://your-backend-url
+   - VITE_API_KEY = same exact shared key
+   - VITE_GOOGLE_MAPS_API_KEY = browser key
+5. Deploy
+
+If you edit env vars later, redeploy so frontend gets updated values.
+
+## Post-Deployment Validation Checklist
+
+Run checks in this order:
+
+1. Chatbot health
+   - GET https://your-chatbot-url/health
+2. Backend health
+   - GET https://your-backend-url/health
+3. Frontend loads
+   - Open your Vercel app URL
+4. Route API works
+   - Search a route from frontend UI
+5. Chatbot works through backend proxy
+   - Send a chatbot message from UI
+6. Emergency endpoint path
+   - Trigger chat emergency intent and confirm response
+
+Optional direct backend chat test:
+
+Use any API client and call:
+
+- POST https://your-backend-url/api/v1/navigation/chat
+- Headers
+  - Content-Type: application/json
+  - x-api-key: SHARED_APP_KEY
+- Body
+  - message: test message
+  - conversationHistory: []
+  - journeyContext: {}
+
+## Common Issues and Fixes
+
+401 Invalid API key:
+
+- Ensure these three are identical:
+  - backend APP_API_KEY
+  - chatbot API_KEY
+  - frontend VITE_API_KEY
+
+Backend cannot reach chatbot:
+
+- Verify backend NIRBHAYA_SERVICE_URL points to chatbot Render URL.
+- Check chatbot logs for request arrivals.
+- Ensure URL has https and no trailing path.
+
+Frontend calls wrong backend:
+
+- Verify VITE_API_BASE_URL is backend URL only.
+- No trailing slash.
+- Redeploy frontend after env changes.
+
+Render cold start delay on free tier:
+
+- First request after idle can be slow.
+- Retry once after warm-up.
+
+Missing Python or Node dependencies:
+
+- Confirm commands exactly:
+  - chatbot build: pip install -r requirements.txt
+  - chatbot start: uvicorn main:app --host 0.0.0.0 --port $PORT
+  - backend build: npm install
+  - backend start: npm start
+
+Google or Gemini key errors:
+
+- Recheck keys in Render env vars.
+- Ensure APIs are enabled on provider dashboard.
+
+## Security Checklist
+
+- Never commit real .env files or API keys.
+- Rotate any key that was exposed in chat, screenshots, or commits.
+- Restrict Google API keys by domain or usage where possible.
+- Use separate keys for local and production.
 
 ## Notes
 
-- Backend CORS currently allows all origins.
-- Render free instances may sleep; first request can be slow.
-- If you later move backend to Vercel Functions, update VITE_API_BASE_URL accordingly.
+- This project can use render.yaml, but manual setup is fully supported and suitable for free tier.
+- Backend CORS currently allows all origins; tighten this for production if needed.
+- Keep backend and chatbot in same region for lower latency.
