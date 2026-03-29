@@ -546,28 +546,56 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     userMessage: string,
     history: Message[],
   ) => {
-    const response = await fetch(`${API_BASE_URL}/api/v1/navigation/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': API_KEY,
-      },
-      body: JSON.stringify({
-        message: userMessage,
-        conversationHistory: history.map(item => ({ role: item.role, content: item.content })),
-        journeyContext: enhancedJourneyContext,
-        routeContext: hasActiveRoute
-          ? {
-              safetyScore: routeData.safetyScore,
-              riskLevel: routeData.riskLevel,
-              incidents: routeData.incidents,
-              hospitals: routeData.nearestHospital,
-              policeStation: routeData.nearestPolice,
-              isNightTime: routeData.isNightTime,
-            }
-          : undefined,
-      }),
-    });
+    const requestBody = {
+      message: userMessage,
+      conversationHistory: history.map(item => ({ role: item.role, content: item.content })),
+      journeyContext: enhancedJourneyContext,
+      routeContext: hasActiveRoute
+        ? {
+            safetyScore: routeData.safetyScore,
+            riskLevel: routeData.riskLevel,
+            incidents: routeData.incidents,
+            hospitals: routeData.nearestHospital,
+            policeStation: routeData.nearestPolice,
+            isNightTime: routeData.isNightTime,
+          }
+        : undefined,
+    };
+
+    const transientStatuses = new Set([502, 503, 504]);
+    let response: Response | null = null;
+    let networkError: unknown = null;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        response = await fetch(`${API_BASE_URL}/api/v1/navigation/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': API_KEY,
+          },
+          body: JSON.stringify(requestBody),
+        });
+
+        // Retry transient upstream errors that commonly happen while Render wakes up.
+        if (!response.ok && transientStatuses.has(response.status) && attempt < 3) {
+          await sleep(2000 * attempt);
+          continue;
+        }
+
+        break;
+      } catch (error) {
+        networkError = error;
+        if (attempt < 3) {
+          await sleep(2000 * attempt);
+          continue;
+        }
+      }
+    }
+
+    if (!response) {
+      throw new Error(`Network request failed: ${networkError instanceof Error ? networkError.message : 'Unknown network error'}`);
+    }
 
     if (!response.ok) {
       let details = '';
