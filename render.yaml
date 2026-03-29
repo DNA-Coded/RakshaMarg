@@ -18,3 +18,23 @@ services:
         sync: false
       - key: NIRBHAYA_SERVICE_URL
         sync: false
+
+  - type: web
+    name: rakshamarg-chatbot
+    runtime: python
+    rootDir: nirbhaya_bot
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LLM_PROVIDER
+        value: gemini

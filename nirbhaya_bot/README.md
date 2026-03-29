@@ -44,6 +44,32 @@ python main.py
 
 The service will start on `http://localhost:8001`
 
+## Deploying to Render
+
+1. Create a new Web Service in Render from this repository.
+2. Set Root Directory to `nirbhaya_bot`.
+3. Configure build/start commands:
+
+```bash
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+4. Add environment variables:
+
+```env
+API_KEY=must_match_backend_APP_API_KEY
+GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=optional_if_using_openai
+LLM_PROVIDER=gemini
+```
+
+5. Verify deployment with:
+
+```bash
+curl https://your-chatbot-service.onrender.com/health
+```
+
 ## API Endpoints
 
 ### Health Check
