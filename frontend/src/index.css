@@ -56,6 +56,7 @@
   body {
     @apply bg-background text-foreground font-sans antialiased selection:bg-primary/30;
     font-family: 'Inter', sans-serif;
+    position: relative;
   }
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Poppins', sans-serif;
@@ -75,6 +76,11 @@
 
 section {
   background-color: transparent !important;
+}
+
+html,
+#root {
+  position: relative;
 }
 
 

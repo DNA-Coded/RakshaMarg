@@ -34,7 +34,12 @@ const App = () => {
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true,
+        }}
+      >
         <ScrollToAnchor />
         <Suspense fallback={
           <div className="h-screen w-screen flex items-center justify-center bg-background">

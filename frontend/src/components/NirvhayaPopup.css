@@ -1,14 +1,6 @@
 /* Nirvhaya Popup - Floating Chatbot Styling */
 
-/* Floating Button Animations */
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
+/* Removed float animation @keyframes to keep button still */
 
 @keyframes pulse-ring {
   0% {
@@ -48,7 +40,7 @@
 }
 
 .nirvhaya-button {
-  animation: float 3s ease-in-out infinite;
+  transform: translateY(0);
 }
 
 /* Popup Container Animation */
@@ -72,7 +64,7 @@
 
 /* Header Gradient Animation */
 .nirvhaya-header {
-  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #155e75 55%, #0e7490 100%);
   background-size: 200% 200%;
   animation: gradient 3s ease infinite;
 }

@@ -8,24 +8,52 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
 import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import re
+import time
+import math
+import json
+import hashlib
 from datetime import datetime
 
 # Load environment variables
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 API_KEY = os.getenv("API_KEY")
 PORT = int(os.getenv("PORT", 8001))
 HOST = os.getenv("HOST", "0.0.0.0")
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").lower()
+GEMINI_CHAT_MODEL = os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-flash")
+OPENAI_CHAT_MODEL = os.getenv("OPENAI_CHAT_MODEL", "gpt-5-nano")
+CHAT_CACHE_TTL_SECONDS = int(os.getenv("CHAT_CACHE_TTL_SECONDS", 120))
+CHAT_CACHE_MAX_ENTRIES = int(os.getenv("CHAT_CACHE_MAX_ENTRIES", 300))
 
-if not GEMINI_API_KEY:
+MODEL_FALLBACKS = [
+    GEMINI_CHAT_MODEL,
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+]
+
+OPENAI_MODEL_FALLBACKS = [
+    OPENAI_CHAT_MODEL,
+    "gpt-5-nano",
+    "gpt-4o-mini",
+]
+
+if LLM_PROVIDER == "gemini" and not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in .env file")
 
+if LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
+    raise ValueError("OPENAI_API_KEY not found in .env file")
+
 # Configure Gemini API
-genai.configure(api_key=GEMINI_API_KEY)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -232,8 +260,140 @@ class NirbhayaAssistant:
     """Nirbhaya AI Safety Assistant"""
     
     def __init__(self):
-        self.model = genai.GenerativeModel("gemini-2.5-flash")
+        self.provider = LLM_PROVIDER
+        self.model_name = GEMINI_CHAT_MODEL if self.provider == "gemini" else OPENAI_CHAT_MODEL
+        self.model = genai.GenerativeModel(self.model_name) if self.provider == "gemini" else None
+        self.openai_client = OpenAI(api_key=OPENAI_API_KEY) if self.provider == "openai" else None
         self.chat_session = None
+        self._cache = {}
+        self._quota_cooldown_until = 0.0
+
+    def _switch_model(self, next_model: str) -> None:
+        if not next_model or next_model == self.model_name:
+            return
+        self.model_name = next_model
+        if self.provider == "gemini":
+            self.model = genai.GenerativeModel(self.model_name)
+
+    def _is_model_not_found_error(self, error_text: str) -> bool:
+        lowered = error_text.lower()
+        return (
+            "is not found for api version" in lowered
+            or "not supported for generatecontent" in lowered
+            or "model_not_found" in lowered
+            or "does not exist" in lowered
+        )
+
+    def _build_cache_key(self, user_message: str, history: List[Message], context: Optional[JourneyContext], route_context: Optional['RouteContext']) -> str:
+        payload = {
+            "provider": self.provider,
+            "model": self.model_name,
+            "message": user_message,
+            "history": [m.dict() for m in history],
+            "journey_context": context.dict() if context else None,
+            "route_context": route_context.dict() if route_context else None
+        }
+        raw = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _cleanup_cache(self) -> None:
+        now = time.time()
+        expired_keys = [k for k, v in self._cache.items() if v.get("expires_at", 0) <= now]
+        for key in expired_keys:
+            self._cache.pop(key, None)
+
+        if len(self._cache) <= CHAT_CACHE_MAX_ENTRIES:
+            return
+
+        # Drop oldest entries first to stay within cap.
+        keys_by_created = sorted(self._cache.keys(), key=lambda k: self._cache[k].get("created_at", 0))
+        for key in keys_by_created[: max(0, len(self._cache) - CHAT_CACHE_MAX_ENTRIES)]:
+            self._cache.pop(key, None)
+
+    def _get_cached_response(self, cache_key: str) -> Optional[ChatResponse]:
+        self._cleanup_cache()
+        cached = self._cache.get(cache_key)
+        if not cached:
+            return None
+
+        try:
+            return ChatResponse(**cached["data"])
+        except Exception:
+            self._cache.pop(cache_key, None)
+            return None
+
+    def _set_cached_response(self, cache_key: str, response: ChatResponse) -> None:
+        now = time.time()
+        self._cache[cache_key] = {
+            "created_at": now,
+            "expires_at": now + CHAT_CACHE_TTL_SECONDS,
+            "data": response.dict()
+        }
+        self._cleanup_cache()
+
+    def _build_suggested_actions(self, is_emergency: bool, is_anxiety: bool, is_safety_inquiry: bool) -> List[SuggestedAction]:
+        if is_emergency:
+            return [
+                SuggestedAction(
+                    type="SOS",
+                    label="ACTIVATE SOS",
+                    description="Send emergency alert to trusted contacts",
+                    priority="CRITICAL"
+                ),
+                SuggestedAction(
+                    type="EMERGENCY_SERVICES",
+                    label="Call Emergency Services",
+                    description="Contact local police (100 in India)",
+                    priority="CRITICAL"
+                ),
+                SuggestedAction(
+                    type="SAFE_PLACE",
+                    label="Find Nearby Safe Place",
+                    description="Locate nearest police station or hospital",
+                    priority="HIGH"
+                )
+            ]
+
+        if is_anxiety:
+            return [
+                SuggestedAction(
+                    type="SAFE_ROUTE",
+                    label="Verify Route Safety",
+                    description="Check if current route is optimal",
+                    priority="HIGH"
+                ),
+                SuggestedAction(
+                    type="TRUSTED_CONTACTS",
+                    label="Share Location with Trusted Contact",
+                    description="Let someone know where you are",
+                    priority="MEDIUM"
+                )
+            ]
+
+        if is_safety_inquiry:
+            return [
+                SuggestedAction(
+                    type="VIEW_ROUTE",
+                    label="View Full Route",
+                    description="See complete route on map",
+                    priority="MEDIUM"
+                )
+            ]
+
+        return []
+
+    def _build_openai_input(self, history: List[Message], full_message: str) -> str:
+        history_lines = []
+        for msg in history[-12:]:
+            role = "User" if msg.role == "user" else "Assistant"
+            history_lines.append(f"{role}: {msg.content}")
+
+        history_text = "\n".join(history_lines) if history_lines else "(no prior history)"
+        return (
+            f"{NIRBHAYA_SYSTEM_PROMPT}\n\n"
+            f"Conversation History:\n{history_text}\n\n"
+            f"Latest User Message:\n{full_message}"
+        )
     
     def build_route_context(self, route_ctx: Optional['RouteContext']) -> str:
         """Build route-specific context string from detailed safety data"""
@@ -311,107 +471,67 @@ class NirbhayaAssistant:
     
     async def chat(self, user_message: str, history: List[Message], context: Optional[JourneyContext], route_context: Optional['RouteContext'] = None) -> ChatResponse:
         """Process user message and generate response"""
-        
-        # Detect message patterns
+
+        if self._quota_cooldown_until > time.time():
+            retry_seconds = max(1, math.ceil(self._quota_cooldown_until - time.time()))
+            raise Exception(f"QUOTA_COOLDOWN retry in {retry_seconds}s")
+
+        cache_key = self._build_cache_key(user_message, history, context, route_context)
+        cached = self._get_cached_response(cache_key)
+        if cached:
+            return cached
+
         is_emergency = SafetyPatterns.detect_emergency(user_message)
         is_anxiety = SafetyPatterns.detect_anxiety(user_message)
         is_safety_inquiry = SafetyPatterns.detect_safety_inquiry(user_message)
-        
-        # Build journey context and route context
+
         journey_context_str = self.build_journey_context(context)
         route_context_str = self.build_route_context(route_context)
-        
-        # Build conversation for Gemini
+        suggested_actions = self._build_suggested_actions(is_emergency, is_anxiety, is_safety_inquiry)
+
         messages = []
-        
-        # Add conversation history
         for msg in history:
             messages.append({
                 "role": "user" if msg.role == "user" else "model",
                 "parts": [{"text": msg.content}]
             })
-        
-        # Add current message with context (route context first, then journey context)
+
         full_message = f"{user_message}{route_context_str}{journey_context_str}"
         messages.append({
             "role": "user",
             "parts": [{"text": full_message}]
         })
-        
+
+        full_conversation = [
+            {
+                "role": "user",
+                "parts": [{"text": NIRBHAYA_SYSTEM_PROMPT}]
+            },
+            {
+                "role": "model",
+                "parts": [{"text": "I understand. I am Nirbhaya, your AI safety companion. I'm ready to help you stay safe."}]
+            }
+        ] + messages
+
         try:
-            # Generate response using Gemini
-            # Build complete conversation with system prompt at the beginning
-            full_conversation = [
-                {
-                    "role": "user",
-                    "parts": [{"text": NIRBHAYA_SYSTEM_PROMPT}]
-                },
-                {
-                    "role": "model",
-                    "parts": [{"text": "I understand. I am Nirbhaya, your AI safety companion. I'm ready to help you stay safe."}]
-                }
-            ] + messages
-            
-            response = self.model.generate_content(
-                contents=full_conversation,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=500
+            if self.provider == "openai":
+                openai_input = self._build_openai_input(history, full_message)
+                result = self.openai_client.responses.create(
+                    model=self.model_name,
+                    input=openai_input,
                 )
-            )
-            
-            assistant_message = response.text.strip()
-            
-            # Generate suggested actions based on message type
-            suggested_actions = []
-            
-            if is_emergency:
-                suggested_actions = [
-                    SuggestedAction(
-                        type="SOS",
-                        label="ACTIVATE SOS",
-                        description="Send emergency alert to trusted contacts",
-                        priority="CRITICAL"
-                    ),
-                    SuggestedAction(
-                        type="EMERGENCY_SERVICES",
-                        label="Call Emergency Services",
-                        description="Contact local police (100 in India)",
-                        priority="CRITICAL"
-                    ),
-                    SuggestedAction(
-                        type="SAFE_PLACE",
-                        label="Find Nearby Safe Place",
-                        description="Locate nearest police station or hospital",
-                        priority="HIGH"
+                assistant_message = (result.output_text or "").strip()
+            else:
+                response = self.model.generate_content(
+                    contents=full_conversation,
+                    generation_config=genai.types.GenerationConfig(
+                        temperature=0.7,
+                        max_output_tokens=500
                     )
-                ]
-            elif is_anxiety:
-                suggested_actions = [
-                    SuggestedAction(
-                        type="SAFE_ROUTE",
-                        label="Verify Route Safety",
-                        description="Check if current route is optimal",
-                        priority="HIGH"
-                    ),
-                    SuggestedAction(
-                        type="TRUSTED_CONTACTS",
-                        label="Share Location with Trusted Contact",
-                        description="Let someone know where you are",
-                        priority="MEDIUM"
-                    )
-                ]
-            elif is_safety_inquiry:
-                suggested_actions = [
-                    SuggestedAction(
-                        type="VIEW_ROUTE",
-                        label="View Full Route",
-                        description="See complete route on map",
-                        priority="MEDIUM"
-                    )
-                ]
-            
-            return ChatResponse(
+                )
+                assistant_message = response.text.strip()
+
+            chat_response = ChatResponse(
                 response=assistant_message,
                 isEmergency=is_emergency,
                 isAnxiety=is_anxiety,
@@ -419,10 +539,75 @@ class NirbhayaAssistant:
                 suggestedActions=suggested_actions,
                 timestamp=datetime.now().isoformat()
             )
-        
+            self._set_cached_response(cache_key, chat_response)
+            return chat_response
+
         except Exception as e:
-            print(f"Nirbhaya Chat Error: {str(e)}")
+            error_text = str(e)
+
+            if self._is_model_not_found_error(error_text):
+                candidates = OPENAI_MODEL_FALLBACKS if self.provider == "openai" else MODEL_FALLBACKS
+                for candidate in candidates:
+                    if candidate == self.model_name:
+                        continue
+                    try:
+                        self._switch_model(candidate)
+                        if self.provider == "openai":
+                            openai_input = self._build_openai_input(history, full_message)
+                            result = self.openai_client.responses.create(
+                                model=self.model_name,
+                                input=openai_input,
+                            )
+                            assistant_message = (result.output_text or "").strip()
+                        else:
+                            response = self.model.generate_content(
+                                contents=full_conversation,
+                                generation_config=genai.types.GenerationConfig(
+                                    temperature=0.7,
+                                    max_output_tokens=500
+                                )
+                            )
+                            assistant_message = response.text.strip()
+
+                        chat_response = ChatResponse(
+                            response=assistant_message,
+                            isEmergency=is_emergency,
+                            isAnxiety=is_anxiety,
+                            isSafetyInquiry=is_safety_inquiry,
+                            suggestedActions=suggested_actions,
+                            timestamp=datetime.now().isoformat()
+                        )
+                        self._set_cached_response(cache_key, chat_response)
+                        return chat_response
+                    except Exception:
+                        continue
+
+            print(f"Nirbhaya Chat Error: {error_text}")
             raise
+
+
+def _extract_retry_seconds(error_text: str) -> Optional[int]:
+    """Parse retry delay from Gemini quota error messages."""
+    match = re.search(r"retry in\s+([0-9]+(?:\.[0-9]+)?)s", error_text, re.IGNORECASE)
+    if not match:
+        return None
+
+    try:
+        return max(1, int(float(match.group(1))))
+    except Exception:
+        return None
+
+
+def _is_quota_error(error_text: str) -> bool:
+    lowered = error_text.lower()
+    return (
+        "quota exceeded" in lowered
+        or "429" in lowered
+        or "rate limit" in lowered
+        or "resource_exhausted" in lowered
+        or "insufficient_quota" in lowered
+        or "rate_limit_exceeded" in lowered
+    )
 
 # Initialize Nirbhaya
 nirbhaya = NirbhayaAssistant()
@@ -482,9 +667,22 @@ async def chat_endpoint(
         return response
     
     except Exception as e:
+        error_text = str(e)
+        if _is_quota_error(error_text):
+            retry_seconds = _extract_retry_seconds(error_text) or 60
+            nirbhaya._quota_cooldown_until = time.time() + retry_seconds
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "message": f"{nirbhaya.provider.upper()} quota exceeded. Please retry after cooldown.",
+                    "retryAfterSeconds": retry_seconds,
+                    "provider": nirbhaya.provider,
+                },
+            )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Chat processing failed: {str(e)}"
+            detail=f"Chat processing failed: {error_text}"
         )
 
 @app.post("/emergency")

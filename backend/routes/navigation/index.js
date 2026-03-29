@@ -443,11 +443,40 @@ export default async function (fastify, opts) {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                return reply.code(response.status).send({
+                let errorData = null;
+                let rawBody = '';
+
+                try {
+                    rawBody = await response.text();
+                    if (rawBody) {
+                        try {
+                            errorData = JSON.parse(rawBody);
+                        } catch {
+                            errorData = null;
+                        }
+                    }
+                } catch {
+                    rawBody = '';
+                }
+
+                const detail = errorData?.detail;
+                const message =
+                    (typeof detail === 'string' && detail) ||
+                    detail?.message ||
+                    rawBody ||
+                    'Failed to get response from Nirbhaya';
+
+                const payload = {
                     error: 'Nirbhaya service error',
-                    message: errorData.detail || 'Failed to get response from Nirbhaya'
-                });
+                    message,
+                    ...(detail?.retryAfterSeconds ? { retryAfterSeconds: detail.retryAfterSeconds } : {})
+                };
+
+                if (detail && typeof detail === 'object') {
+                    payload.meta = detail;
+                }
+
+                return reply.code(response.status).send(payload);
             }
 
             const result = await response.json();
