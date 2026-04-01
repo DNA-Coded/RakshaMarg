@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { API_BASE_URL, API_KEY } from '@/config';
+import { API_BASE_URL } from '@/config';
 import { toast } from './use-toast';
+import { getAuthHeaders } from '@/lib/apiHeaders';
 
 /**
  * Hook for managing voice-based interaction with MargRakshak
@@ -126,10 +127,9 @@ export const useSmartSafetyMode = (
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/navigation/analyze-journey`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY
-        },
+        headers: await getAuthHeaders({
+          'Content-Type': 'application/json'
+        }),
         body: JSON.stringify({
           route: journeyContext.activeRoute,
           currentTime: new Date().toISOString(),
@@ -208,9 +208,7 @@ export const useTimBasedSafetyCheck = (location?: { lat: number; lng: number }) 
       const response = await fetch(
         `${API_BASE_URL}/api/v1/navigation/time-based-risk?lat=${location.lat}&lng=${location.lng}`,
         {
-          headers: {
-            'x-api-key': API_KEY
-          }
+          headers: await getAuthHeaders()
         }
       );
 
@@ -253,10 +251,9 @@ export const useEmergencyResponse = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/navigation/emergency`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY
-        },
+        headers: await getAuthHeaders({
+          'Content-Type': 'application/json'
+        }),
         body: JSON.stringify({
           message,
           journeyContext

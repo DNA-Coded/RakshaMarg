@@ -20,7 +20,9 @@ import Footer from '@/components/Footer';
 import { motion } from 'framer-motion';
 import mapImage from '@/assets/map.png';
 import { analyzeRouteSafety, getIncidentDetails, RouteInfo, IncidentDetail } from '@/services/navigation';
-import { API_BASE_URL, API_KEY } from '@/config';
+import { API_BASE_URL } from '@/config';
+import { getAuthHeaders } from '@/lib/apiHeaders';
+import { observeAuthState } from '@/lib/firebaseAuth';
 import { toast } from '@/hooks/use-toast';
 
 const safetyTips = [
@@ -33,6 +35,8 @@ const safetyTips = [
 ];
 
 const CheckRoute = () => {
+  type TrustedContact = { name: string; phone: string };
+
   const [fromLocation, setFromLocation] = useState('');
   const [toLocation, setToLocation] = useState('');
 
@@ -67,12 +71,120 @@ const CheckRoute = () => {
 
   // Trusted Contacts State
   const [showContactModal, setShowContactModal] = useState(false);
-  const [trustedContacts, setTrustedContacts] = useState<{ name: string, phone: string }[]>([]);
+  const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Load contacts from local storage on mount
+  const CONTACTS_STORAGE_KEY = 'raksha_trusted_contacts';
+
+  const normalizeContacts = (contacts: TrustedContact[]) => {
+    return contacts
+      .map((contact) => ({
+        name: String(contact.name || '').trim(),
+        phone: String(contact.phone || '').trim()
+      }))
+      .filter((contact) => contact.name.length > 0 && contact.phone.length > 0);
+  };
+
+  const loadContactsFromLocal = () => {
+    const saved = localStorage.getItem(CONTACTS_STORAGE_KEY);
+    if (!saved) return [] as TrustedContact[];
+
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      return normalizeContacts(parsed);
+    } catch {
+      return [];
+    }
+  };
+
+  const saveContactsToLocal = (contacts: TrustedContact[]) => {
+    localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(contacts));
+  };
+
+  const saveContactsToServer = async (contacts: TrustedContact[]) => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/users/me/trusted-contacts`, {
+      method: 'PUT',
+      headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ contacts })
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      throw new Error(details || `Failed to save contacts (${response.status})`);
+    }
+
+    const data = await response.json();
+    return normalizeContacts(data.contacts || []);
+  };
+
+  const loadContactsFromServer = async () => {
+    const response = await fetch(`${API_BASE_URL}/api/v1/users/me/trusted-contacts`, {
+      method: 'GET',
+      headers: await getAuthHeaders()
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      throw new Error(details || `Failed to load contacts (${response.status})`);
+    }
+
+    const data = await response.json();
+    return normalizeContacts(data.contacts || []);
+  };
+
+  const persistContacts = async (contacts: TrustedContact[]) => {
+    const normalized = normalizeContacts(contacts);
+    setTrustedContacts(normalized);
+    saveContactsToLocal(normalized);
+
+    if (!isAuthenticated) return;
+
+    try {
+      const serverContacts = await saveContactsToServer(normalized);
+      setTrustedContacts(serverContacts);
+      saveContactsToLocal(serverContacts);
+    } catch (error) {
+      console.error('Failed to save trusted contacts:', error);
+      toast({
+        title: 'Saved locally',
+        description: 'Could not sync contacts to server right now.',
+        variant: 'destructive'
+      });
+    }
+  };
+
   useEffect(() => {
-    const saved = localStorage.getItem('raksha_trusted_contacts');
-    if (saved) setTrustedContacts(JSON.parse(saved));
+    const unsubscribe = observeAuthState(async (user) => {
+      const loggedIn = Boolean(user);
+      setIsAuthenticated(loggedIn);
+
+      if (!loggedIn) {
+        setTrustedContacts(loadContactsFromLocal());
+        return;
+      }
+
+      try {
+        const localContacts = loadContactsFromLocal();
+        const serverContacts = await loadContactsFromServer();
+
+        // First login on a new account: migrate local contacts to server.
+        if (serverContacts.length === 0 && localContacts.length > 0) {
+          const synced = await saveContactsToServer(localContacts);
+          setTrustedContacts(synced);
+          saveContactsToLocal(synced);
+          return;
+        }
+
+        setTrustedContacts(serverContacts);
+        saveContactsToLocal(serverContacts);
+      } catch (error) {
+        console.error('Failed to sync trusted contacts:', error);
+        setTrustedContacts(loadContactsFromLocal());
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Update Route Context for Chatbot Integration
@@ -102,14 +214,12 @@ const CheckRoute = () => {
 
   const addContact = (name: string, phone: string) => {
     const updated = [...trustedContacts, { name, phone }];
-    setTrustedContacts(updated);
-    localStorage.setItem('raksha_trusted_contacts', JSON.stringify(updated));
+    void persistContacts(updated);
   };
 
   const removeContact = (index: number) => {
     const updated = trustedContacts.filter((_, i) => i !== index);
-    setTrustedContacts(updated);
-    localStorage.setItem('raksha_trusted_contacts', JSON.stringify(updated));
+    void persistContacts(updated);
   };
 
   const [locationAccuracy, setLocationAccuracy] = useState<number | null>(null);
@@ -331,7 +441,7 @@ const CheckRoute = () => {
           // Notify backend
           await fetch(`${API_BASE_URL}/sos`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
+            headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ lat: latitude, lng: longitude, timestamp: new Date().toISOString(), route: routeResult?.summary })
           });
           // 1. Notify Trusted Contacts (WhatsApp)

@@ -1,5 +1,6 @@
 import fp from 'fastify-plugin';
 import { config } from '../config/env.js';
+import { verifyIdToken } from '../services/firebaseAdmin.js';
 
 /**
  * Authentication plugin
@@ -28,6 +29,37 @@ export default fp(async (fastify, opts) => {
             return reply.code(401).send({
                 error: 'Unauthorized',
                 message: 'Invalid or Missing API Key'
+            });
+        }
+    });
+
+    fastify.decorate('verifyFirebaseToken', async function (request, reply) {
+        const authHeader = request.headers.authorization;
+
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return reply.code(401).send({
+                error: 'Unauthorized',
+                message: 'Missing Firebase Bearer token'
+            });
+        }
+
+        const idToken = authHeader.slice('Bearer '.length).trim();
+
+        if (!idToken) {
+            return reply.code(401).send({
+                error: 'Unauthorized',
+                message: 'Invalid Firebase Bearer token'
+            });
+        }
+
+        try {
+            const decodedToken = await verifyIdToken(idToken);
+            request.user = decodedToken;
+        } catch (error) {
+            request.log.error({ err: error }, 'Firebase token verification failed');
+            return reply.code(401).send({
+                error: 'Unauthorized',
+                message: 'Invalid or expired Firebase token'
             });
         }
     });

@@ -45,10 +45,18 @@ The RakshaMarg Backend API provides intelligent route planning and safety analys
 
 All API endpoints (except `/health`) require API key authentication.
 
+User profile endpoints also require Firebase ID token authentication.
+
 ### Header Required
 
 ```
 x-api-key: YOUR_API_KEY
+```
+
+### Firebase Header (for user routes)
+
+```
+Authorization: Bearer FIREBASE_ID_TOKEN
 ```
 
 ### Example Request
@@ -65,6 +73,13 @@ curl -H "x-api-key: YOUR_API_KEY" \
   "error": "Invalid or Missing API Key"
 }
 ```
+
+### User Profile Endpoints
+
+- `GET /api/v1/users/me` (requires `x-api-key` and Firebase `Authorization` header)
+- `PATCH /api/v1/users/me` (requires `x-api-key` and Firebase `Authorization` header)
+
+The backend verifies the Firebase token and stores/updates user data in MongoDB keyed by `firebaseUid`.
 
 ---
 

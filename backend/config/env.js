@@ -16,6 +16,11 @@ export const config = {
     appApiKey: process.env.APP_API_KEY,
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
+    mongodbUri: process.env.MONGODB_URI,
+    mongodbDbName: process.env.MONGODB_DB_NAME || 'rakshamarg',
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
+    firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,
     nirbhayaServiceUrl: process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001',
     rateLimit: {
         max: 100,

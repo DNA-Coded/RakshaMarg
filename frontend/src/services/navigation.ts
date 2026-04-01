@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 import { API_BASE_URL, API_KEY } from '../config';
+import { getFirebaseIdToken } from '@/lib/firebase';
 
 const getBaseUrl = () => {
     const base = API_BASE_URL.replace(/\/$/, "");
@@ -8,11 +9,23 @@ const getBaseUrl = () => {
 };
 
 const api = axios.create({
-    baseURL: getBaseUrl(),
-    headers: {
+    baseURL: getBaseUrl()
+});
+
+api.interceptors.request.use(async (requestConfig) => {
+    const token = await getFirebaseIdToken();
+
+    requestConfig.headers = {
+        ...requestConfig.headers,
         'x-api-key': API_KEY,
-        'Content-Type': 'application/json',
-    },
+        'Content-Type': 'application/json'
+    };
+
+    if (token) {
+        requestConfig.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return requestConfig;
 });
 
 export interface RouteSafetyResponse {

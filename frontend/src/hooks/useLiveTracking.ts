@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
-import { API_BASE_URL, API_KEY } from '../config';
+import { API_BASE_URL } from '../config';
+import { getAuthHeaders } from '@/lib/apiHeaders';
 import { toast } from './use-toast';
 
 const ROUTE_RECALC_MIN_DISTANCE_METERS = 15;
@@ -441,10 +442,9 @@ export const useLiveTracking = (
                         try {
                             const response = await fetch(`${API_BASE_URL}/track`, {
                                 method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'x-api-key': API_KEY
-                                },
+                                headers: await getAuthHeaders({
+                                    'Content-Type': 'application/json'
+                                }),
                                 signal: controller.signal,
                                 body: JSON.stringify({
                                     currentLat: latitude,

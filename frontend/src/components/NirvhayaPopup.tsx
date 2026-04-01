@@ -111,7 +111,7 @@ export const NirvhayaPopup: React.FC<NirvhayaPopupProps> = ({
         <div className={`nirvhaya-transition flex flex-col border border-white/10 bg-slate-950/80 shadow-2xl overflow-hidden transition-all duration-300 ${
           isMaximized
             ? 'w-screen h-screen fixed inset-0 rounded-none'
-            : 'h-screen w-screen rounded-none md:mb-3 md:mr-3 md:h-[78vh] md:max-h-[640px] md:w-[430px] md:max-w-[calc(100vw-1rem)] md:rounded-2xl'
+            : 'h-screen w-screen rounded-none md:mb-3 md:mr-3 md:h-[86vh] md:max-h-[820px] md:w-[min(62vw,820px)] md:max-w-[calc(100vw-1rem)] md:rounded-2xl'
         }`}>
           {/* Header */}
           <div className="nirvhaya-header text-white px-6 py-4 flex items-center justify-between">

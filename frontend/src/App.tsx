@@ -10,11 +10,14 @@ import { ReactLenis } from '@studio-freight/react-lenis';
 import ScrollToAnchor from "./components/ScrollToAnchor";
 import { NirvhayaPopup } from "./components/NirvhayaPopup";
 import { RouteProvider } from "./context/RouteContext";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 const Index = lazy(() => import("./pages/Index"));
 const CheckRoute = lazy(() => import("./pages/CheckRoute"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Inspiration = lazy(() => import("./pages/Inspiration"));
+const Account = lazy(() => import("./pages/Account"));
+const Login = lazy(() => import("./pages/Login"));
 
 const queryClient = new QueryClient();
 
@@ -48,8 +51,10 @@ const App = () => {
         }>
           <Routes>
             <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/check-route" element={<CheckRoute />} />
             <Route path="/inspiration" element={<Inspiration />} />
+            <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
