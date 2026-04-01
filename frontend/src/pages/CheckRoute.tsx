@@ -275,6 +275,25 @@ const CheckRoute = () => {
 
   const [sosActive, setSosActive] = useState(false);
   const [isSosSending, setIsSosSending] = useState(false);
+  const [activeAlertId, setActiveAlertId] = useState<string | null>(null);
+  const [activeAlertStatus, setActiveAlertStatus] = useState<any>(null);
+  const [guardianError, setGuardianError] = useState<string | null>(null);
+  const [checkInSession, setCheckInSession] = useState<any>(null);
+  const [isCheckInLoading, setIsCheckInLoading] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
+
+  const CHECK_IN_PING_MS = 45000;
+  const CHECK_IN_STATUS_POLL_MS = 15000;
+  const ALERT_STATUS_POLL_MS = 12000;
+
+  const checkInPingIntervalRef = React.useRef<number | null>(null);
+  const checkInStatusIntervalRef = React.useRef<number | null>(null);
+  const alertStatusIntervalRef = React.useRef<number | null>(null);
+
+  const apiHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': API_KEY,
+  };
 
   // Smart Safety Mode
   const [smartSafetyEnabled, setSmartSafetyEnabled] = useState(false);
@@ -316,6 +335,207 @@ const CheckRoute = () => {
     isNightTime: new Date().getHours() < 5 || new Date().getHours() > 21
   };
 
+  const pollGuardianAlert = async (alertId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/navigation/guardian/alerts/${alertId}`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Guardian status failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setActiveAlertStatus(data);
+
+      if (data.state === 'acknowledged' || data.state === 'max_escalation_reached') {
+        if (alertStatusIntervalRef.current !== null) {
+          window.clearInterval(alertStatusIntervalRef.current);
+          alertStatusIntervalRef.current = null;
+        }
+      }
+    } catch (error: any) {
+      setGuardianError(error?.message || 'Unable to fetch guardian alert status.');
+    }
+  };
+
+  const startCheckInSession = async () => {
+    if (isCheckInLoading) return;
+
+    setIsCheckInLoading(true);
+    setCheckInError(null);
+
+    try {
+      const currentLocation = userLiveLocation || initialCoordinates;
+      const response = await fetch(`${API_BASE_URL}/api/v1/navigation/check-ins/start`, {
+        method: 'POST',
+        headers: apiHeaders,
+        body: JSON.stringify({
+          userId: 'anonymous',
+          journeyId: `${Date.now()}`,
+          routeSummary: routeResult?.summary || `${fromLocation} -> ${toLocation}`,
+          intervalSeconds: 120,
+          gracePeriodSeconds: 60,
+          maxMissedCheckInsBeforeEscalation: 2,
+          coordinates: currentLocation || undefined,
+          contacts: trustedContacts,
+        })
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Check-in start failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCheckInSession(data.session);
+
+      toast({
+        title: 'Safety check-ins enabled',
+        description: 'We will monitor your check-ins and escalate if you miss them.',
+      });
+    } catch (error: any) {
+      setCheckInError(error?.message || 'Unable to start check-in monitoring.');
+      toast({
+        title: 'Check-in start failed',
+        description: error?.message || 'Unable to start check-in monitoring.',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCheckInLoading(false);
+    }
+  };
+
+  const pingCheckInSession = async (sessionId: string) => {
+    const currentLocation = userLiveLocation || initialCoordinates;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/navigation/check-ins/${sessionId}/ping`, {
+        method: 'POST',
+        headers: apiHeaders,
+        body: JSON.stringify({
+          coordinates: currentLocation || undefined,
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCheckInSession(data.session);
+      }
+    } catch (error) {
+      console.error('Check-in ping failed:', error);
+    }
+  };
+
+  const pollCheckInSession = async (sessionId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/navigation/check-ins/${sessionId}`, {
+        headers: { 'x-api-key': API_KEY }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Check-in status failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCheckInSession(data);
+
+      if (data.state === 'escalated' && data.escalationAlertId && !activeAlertId) {
+        setActiveAlertId(data.escalationAlertId);
+      }
+    } catch (error: any) {
+      setCheckInError(error?.message || 'Unable to fetch check-in status.');
+    }
+  };
+
+  const stopCheckInSession = async () => {
+    if (!checkInSession?.id) return;
+
+    setIsCheckInLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/navigation/check-ins/${checkInSession.id}/stop`, {
+        method: 'POST',
+        headers: apiHeaders,
+        body: JSON.stringify({ reason: 'arrived_or_user_stopped' })
+      });
+
+      if (!response.ok) {
+        const message = await response.text();
+        throw new Error(message || `Check-in stop failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCheckInSession(data.session);
+      toast({
+        title: 'Safety check-ins stopped',
+        description: 'Automatic check-in monitoring has been ended for this journey.',
+      });
+    } catch (error: any) {
+      setCheckInError(error?.message || 'Unable to stop check-in session.');
+    } finally {
+      setIsCheckInLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeAlertId) {
+      if (alertStatusIntervalRef.current !== null) {
+        window.clearInterval(alertStatusIntervalRef.current);
+        alertStatusIntervalRef.current = null;
+      }
+      return;
+    }
+
+    void pollGuardianAlert(activeAlertId);
+
+    if (alertStatusIntervalRef.current === null) {
+      alertStatusIntervalRef.current = window.setInterval(() => {
+        void pollGuardianAlert(activeAlertId);
+      }, ALERT_STATUS_POLL_MS);
+    }
+
+    return () => {
+      if (alertStatusIntervalRef.current !== null) {
+        window.clearInterval(alertStatusIntervalRef.current);
+        alertStatusIntervalRef.current = null;
+      }
+    };
+  }, [activeAlertId]);
+
+  useEffect(() => {
+    if (!checkInSession?.id || checkInSession.state !== 'active') {
+      if (checkInPingIntervalRef.current !== null) {
+        window.clearInterval(checkInPingIntervalRef.current);
+        checkInPingIntervalRef.current = null;
+      }
+      if (checkInStatusIntervalRef.current !== null) {
+        window.clearInterval(checkInStatusIntervalRef.current);
+        checkInStatusIntervalRef.current = null;
+      }
+      return;
+    }
+
+    void pollCheckInSession(checkInSession.id);
+
+    checkInPingIntervalRef.current = window.setInterval(() => {
+      void pingCheckInSession(checkInSession.id);
+    }, CHECK_IN_PING_MS);
+
+    checkInStatusIntervalRef.current = window.setInterval(() => {
+      void pollCheckInSession(checkInSession.id);
+    }, CHECK_IN_STATUS_POLL_MS);
+
+    return () => {
+      if (checkInPingIntervalRef.current !== null) {
+        window.clearInterval(checkInPingIntervalRef.current);
+        checkInPingIntervalRef.current = null;
+      }
+      if (checkInStatusIntervalRef.current !== null) {
+        window.clearInterval(checkInStatusIntervalRef.current);
+        checkInStatusIntervalRef.current = null;
+      }
+    };
+  }, [checkInSession?.id, checkInSession?.state, userLiveLocation, initialCoordinates]);
+
   const handleSOS = async () => {
     if (sosActive || isSosSending) return;
 
@@ -329,11 +549,29 @@ const CheckRoute = () => {
           const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
           // Notify backend
-          await fetch(`${API_BASE_URL}/sos`, {
+          const response = await fetch(`${API_BASE_URL}/api/v1/navigation/sos`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-key': API_KEY },
-            body: JSON.stringify({ lat: latitude, lng: longitude, timestamp: new Date().toISOString(), route: routeResult?.summary })
+            headers: apiHeaders,
+            body: JSON.stringify({
+              lat: latitude,
+              lng: longitude,
+              timestamp: new Date().toISOString(),
+              route: routeResult?.summary,
+              contacts: trustedContacts,
+              message: `Manual SOS triggered on route ${fromLocation} -> ${toLocation}`,
+            })
           });
+
+          if (!response.ok) {
+            const message = await response.text();
+            throw new Error(message || `SOS failed: ${response.status}`);
+          }
+
+          const data = await response.json();
+          if (data?.alert?.id) {
+            setActiveAlertId(data.alert.id);
+            setActiveAlertStatus(data.alert);
+          }
           // 1. Notify Trusted Contacts (WhatsApp)
           const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
           notifyTrustedContacts(sosMsg);
@@ -504,6 +742,79 @@ const CheckRoute = () => {
                   toLocation={toLocation}
                   isFullScreen={isFullScreen}
                 />
+              </div>
+            </section>
+          )}
+
+          {(showResults || activeAlertStatus || checkInSession) && (
+            <section className="container px-4 mb-12">
+              <div className="max-w-4xl mx-auto grid md:grid-cols-2 gap-4">
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">🆘</span>
+                    <h3 className="font-display text-lg text-white">Emergency Alert</h3>
+                  </div>
+
+                  {activeAlertStatus ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-lg text-green-400 font-bold">
+                        <span className="text-2xl">✓</span>
+                        Your contacts have been notified
+                      </div>
+                      <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-white/80">
+                        <p className="font-semibold mb-2">Contact(s) reached: {activeAlertStatus.contacts?.length || 0}</p>
+                        {activeAlertStatus.acknowledgements?.length > 0 && (
+                          <p className="text-green-300">✓ {activeAlertStatus.acknowledgements?.length} contact(s) acknowledged</p>
+                        )}
+                      </div>
+                      <div className="text-xs text-white/60 mt-2">
+                        <p>Status: {activeAlertStatus.state === 'acknowledged' ? '✓ Help is on the way' : 'Waiting for response...'}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-white/60">When you feel unsafe, tap the red SOS button below</p>
+                  )}
+
+                  {guardianError && <p className="text-xs text-red-300 mt-3">⚠️ {guardianError}</p>}
+                </div>
+
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-2xl">💓</span>
+                    <h3 className="font-display text-lg text-white">Safety Heartbeat</h3>
+                  </div>
+
+                  {checkInSession?.state === 'active' ? (
+                    <div className="space-y-3">
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm text-white/80">
+                        <p className="font-semibold mb-1">✓ Auto-Check Active</p>
+                        <p className="text-blue-300">We check on you every 2 minutes</p>
+                        <p className="text-xs text-white/60 mt-2">If you don't tap "I'm Safe", we'll send emergency alert</p>
+                      </div>
+                      <Button
+                        onClick={stopCheckInSession}
+                        disabled={isCheckInLoading}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        I'm Safe. Stop Checking
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-sm text-white/70">Let us automatically check if you're safe during your journey. If you don't respond, we alert your contacts.</p>
+                      <Button
+                        onClick={startCheckInSession}
+                        disabled={isCheckInLoading || !routeResult}
+                        className="w-full bg-blue-600 hover:bg-blue-700"
+                      >
+                        Enable Safety Heartbeat
+                      </Button>
+                    </div>
+                  )}
+
+                  {checkInError && <p className="text-xs text-red-300 mt-3">⚠️ {checkInError}</p>}
+                </div>
               </div>
             </section>
           )}

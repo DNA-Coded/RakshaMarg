@@ -3,6 +3,8 @@ import { geminiService } from '../../services/geminiService.js';
 import { safetyAssistant } from '../../services/safetyAssistant.js';
 import { safetyRouteController } from '../../controllers/safetyRouteController.js';
 import { incidentDetailsController } from '../../controllers/incidentDetailsController.js';
+import { guardianAlertService } from '../../services/guardianAlertService.js';
+import { checkInService } from '../../services/checkInService.js';
 // import { firebaseService } from '../../services/firebase.js';
 
 
@@ -211,12 +213,259 @@ export default async function (fastify, opts) {
         };
     });
 
-    // POST /sos - Trigger SOS
+    // POST /sos - Trigger SOS with dispatch + escalation workflow
     fastify.post('/sos', {
-        onRequest: [fastify.verifyApiKey] // And maybe verifyFirebaseToken
+        schema: {
+            body: {
+                type: 'object',
+                required: ['lat', 'lng'],
+                properties: {
+                    lat: { type: 'number' },
+                    lng: { type: 'number' },
+                    userId: { type: 'string' },
+                    journeyId: { type: 'string' },
+                    route: { type: 'string' },
+                    message: { type: 'string' },
+                    contacts: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string' },
+                                name: { type: 'string' },
+                                phone: { type: 'string' },
+                                channelPreference: { type: 'string' }
+                            }
+                        }
+                    },
+                    escalationDelaySeconds: { type: 'number' },
+                    maxEscalationLevel: { type: 'number' }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
     }, async (request, reply) => {
-        // Logic to handle SOS
-        return { status: 'SOS Triggered' };
+        try {
+            const {
+                lat,
+                lng,
+                userId,
+                journeyId,
+                route,
+                message,
+                contacts = [],
+                escalationDelaySeconds,
+                maxEscalationLevel,
+            } = request.body;
+
+            const alertStatus = await guardianAlertService.triggerSosAlert({
+                type: 'manual_sos',
+                userId,
+                journeyId,
+                routeSummary: route,
+                message,
+                contacts,
+                coordinates: { lat, lng },
+                escalationDelaySeconds,
+                maxEscalationLevel,
+                metadata: {
+                    source: 'navigation_sos_endpoint',
+                }
+            });
+
+            return {
+                status: 'sos_triggered',
+                alert: alertStatus,
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error) {
+            return reply.code(500).send({
+                error: 'SOS dispatch failed',
+                message: error.message,
+            });
+        }
+    });
+
+    // POST /guardian/acknowledge - Contact confirms they received SOS
+    fastify.post('/guardian/acknowledge', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['alertId'],
+                properties: {
+                    alertId: { type: 'string' },
+                    contactId: { type: 'string' },
+                    contactName: { type: 'string' },
+                    channel: { type: 'string' },
+                    note: { type: 'string' }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { alertId, contactId, contactName, channel, note } = request.body;
+        const updated = guardianAlertService.acknowledgeAlert(alertId, {
+            contactId,
+            contactName,
+            channel,
+            note,
+        });
+
+        if (!updated) {
+            return reply.code(404).send({
+                error: 'Alert not found',
+                message: `No SOS alert found for id ${alertId}`,
+            });
+        }
+
+        return {
+            status: 'acknowledged',
+            alert: updated,
+            timestamp: new Date().toISOString(),
+        };
+    });
+
+    // GET /guardian/alerts/:alertId - Fetch alert state for dashboard/polling
+    fastify.get('/guardian/alerts/:alertId', {
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { alertId } = request.params;
+        const alert = guardianAlertService.getAlertStatus(alertId);
+
+        if (!alert) {
+            return reply.code(404).send({
+                error: 'Alert not found',
+                message: `No SOS alert found for id ${alertId}`,
+            });
+        }
+
+        return alert;
+    });
+
+    // POST /check-ins/start - Start check-in monitoring session
+    fastify.post('/check-ins/start', {
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    userId: { type: 'string' },
+                    journeyId: { type: 'string' },
+                    routeSummary: { type: 'string' },
+                    intervalSeconds: { type: 'number' },
+                    gracePeriodSeconds: { type: 'number' },
+                    maxMissedCheckInsBeforeEscalation: { type: 'number' },
+                    coordinates: {
+                        type: 'object',
+                        properties: {
+                            lat: { type: 'number' },
+                            lng: { type: 'number' }
+                        }
+                    },
+                    contacts: {
+                        type: 'array',
+                        items: {
+                            type: 'object',
+                            properties: {
+                                id: { type: 'string' },
+                                name: { type: 'string' },
+                                phone: { type: 'string' },
+                                channelPreference: { type: 'string' }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request) => {
+        const session = checkInService.startSession(request.body);
+        return {
+            status: 'check_in_session_started',
+            session,
+            timestamp: new Date().toISOString(),
+        };
+    });
+
+    // POST /check-ins/:sessionId/ping - Keepalive from user app
+    fastify.post('/check-ins/:sessionId/ping', {
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    coordinates: {
+                        type: 'object',
+                        properties: {
+                            lat: { type: 'number' },
+                            lng: { type: 'number' }
+                        }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { sessionId } = request.params;
+        const session = checkInService.pingSession(sessionId, request.body || {});
+
+        if (!session) {
+            return reply.code(404).send({
+                error: 'Session not found',
+                message: `No check-in session found for id ${sessionId}`,
+            });
+        }
+
+        return {
+            status: 'check_in_received',
+            session,
+            timestamp: new Date().toISOString(),
+        };
+    });
+
+    // POST /check-ins/:sessionId/stop - End check-in monitoring
+    fastify.post('/check-ins/:sessionId/stop', {
+        schema: {
+            body: {
+                type: 'object',
+                properties: {
+                    reason: { type: 'string' }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { sessionId } = request.params;
+        const { reason = 'manual_stop' } = request.body || {};
+        const session = checkInService.stopSession(sessionId, reason);
+
+        if (!session) {
+            return reply.code(404).send({
+                error: 'Session not found',
+                message: `No check-in session found for id ${sessionId}`,
+            });
+        }
+
+        return {
+            status: 'check_in_session_stopped',
+            session,
+            timestamp: new Date().toISOString(),
+        };
+    });
+
+    // GET /check-ins/:sessionId - Poll current check-in status
+    fastify.get('/check-ins/:sessionId', {
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { sessionId } = request.params;
+        const session = checkInService.getSession(sessionId);
+
+        if (!session) {
+            return reply.code(404).send({
+                error: 'Session not found',
+                message: `No check-in session found for id ${sessionId}`,
+            });
+        }
+
+        return session;
     });
 
     // POST /track - Live navigation tracking
