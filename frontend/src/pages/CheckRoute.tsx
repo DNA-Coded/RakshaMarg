@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Helmet } from 'react-helmet-async';
 import { GoogleMap, useJsApiLoader, DirectionsRenderer, Autocomplete, Polyline, Marker, InfoWindow } from '@react-google-maps/api';
@@ -73,6 +73,8 @@ const CheckRoute = () => {
   const [showContactModal, setShowContactModal] = useState(false);
   const [trustedContacts, setTrustedContacts] = useState<TrustedContact[]>([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const lastRouteContextSyncKeyRef = useRef<string | null>(null);
+  const routeContextSyncedRef = useRef(false);
 
   const CONTACTS_STORAGE_KEY = 'raksha_trusted_contacts';
 
@@ -193,6 +195,26 @@ const CheckRoute = () => {
       const currentHour = new Date().getHours();
       const isNightTime = currentHour < 5 || currentHour > 21;
 
+      const nearestHospitalForContext = hospitals && hospitals.length > 0 ? hospitals[0] : null;
+      const nearestPoliceForContext = policeStations && policeStations.length > 0 ? policeStations[0] : null;
+      const routeContextSyncKey = JSON.stringify({
+        origin: fromLocation,
+        destination: toLocation,
+        safetyScore: routeResult.safetyScore || null,
+        summary: routeResult.summary || null,
+        incidentsCount: routeResult.incidents?.length || 0,
+        nearestHospitalName: nearestHospitalForContext?.name || null,
+        nearestHospitalDistance: nearestHospitalForContext?.distance || null,
+        nearestPoliceName: nearestPoliceForContext?.name || null,
+        nearestPoliceDistance: nearestPoliceForContext?.distance || null,
+        isNightTime,
+        routesCount: allRoutes?.length || 0,
+      });
+
+      if (lastRouteContextSyncKeyRef.current === routeContextSyncKey) {
+        return;
+      }
+
       setRouteData({
         origin: fromLocation,
         destination: toLocation,
@@ -202,13 +224,17 @@ const CheckRoute = () => {
           (routeResult.safetyScore || 0) >= 50 ? 'Moderate Risk' :
           'High Risk',
         incidents: routeResult.incidents || [],
-        nearestHospital: hospitals && hospitals.length > 0 ? hospitals[0] : null,
-        nearestPolice: policeStations && policeStations.length > 0 ? policeStations[0] : null,
+        nearestHospital: nearestHospitalForContext,
+        nearestPolice: nearestPoliceForContext,
         isNightTime,
         routes: allRoutes || [],
       });
-    } else if (!routeResult) {
+      lastRouteContextSyncKeyRef.current = routeContextSyncKey;
+      routeContextSyncedRef.current = true;
+    } else if (!routeResult && routeContextSyncedRef.current) {
       clearRouteData();
+      lastRouteContextSyncKeyRef.current = null;
+      routeContextSyncedRef.current = false;
     }
   }, [routeResult, fromLocation, toLocation, hospitals, policeStations, allRoutes, setRouteData, clearRouteData]);
 
@@ -382,6 +408,48 @@ const CheckRoute = () => {
     () => handleCheckRoute(fromLocation, toLocation),
     map
   );
+
+  const autoTrackingRouteKeyRef = useRef<string | null>(null);
+  const hasNotifiedTrackingStartRef = useRef(false);
+
+  useEffect(() => {
+    if (!showResults || !routeResult?.overview_polyline || !fromLocation || !toLocation) {
+      return;
+    }
+
+    const routePolyline =
+      typeof routeResult.overview_polyline === 'string'
+        ? routeResult.overview_polyline
+        : routeResult?.overview_polyline?.points || '';
+
+    if (!routePolyline) {
+      return;
+    }
+
+    const routeKey = `${fromLocation}::${toLocation}::${routePolyline}`;
+
+    if (autoTrackingRouteKeyRef.current === routeKey && isTracking) {
+      return;
+    }
+
+    if (isTracking) {
+      stopTracking();
+    }
+
+    const shouldNotifyContacts = !hasNotifiedTrackingStartRef.current;
+    startTracking('navigation', { notifyContacts: shouldNotifyContacts });
+    autoTrackingRouteKeyRef.current = routeKey;
+    hasNotifiedTrackingStartRef.current = true;
+  }, [showResults, routeResult, fromLocation, toLocation, isTracking, startTracking, stopTracking]);
+
+  useEffect(() => {
+    if (showResults && routeResult) {
+      return;
+    }
+
+    autoTrackingRouteKeyRef.current = null;
+    hasNotifiedTrackingStartRef.current = false;
+  }, [showResults, routeResult]);
 
   const [sosActive, setSosActive] = useState(false);
   const [isSosSending, setIsSosSending] = useState(false);
@@ -598,14 +666,11 @@ const CheckRoute = () => {
                   setRouteResult={setRouteResult}
                   trustedContacts={trustedContacts}
                   setShowContactModal={setShowContactModal}
-                  isTracking={isTracking}
                   trackingError={trackingError}
                   isGpsSignalLost={isGpsSignalLost}
                   isRouteUpdatesPaused={isRouteUpdatesPaused}
                   nearestHospital={nearestHospital}
                   nearestPoliceStation={nearestPoliceStation}
-                  startTracking={startTracking}
-                  stopTracking={stopTracking}
                   handleShareLocation={handleShareLocation}
                   handleSOS={handleSOS}
                   sosActive={sosActive}

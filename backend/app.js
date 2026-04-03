@@ -2,7 +2,8 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import authPlugin from './plugins/auth.js';
 import rateLimitPlugin from './plugins/rate-limit.js';
-import { connectMongoDB, disconnectMongoDB } from './services/mongodb.js';
+import { connectMongoDB, disconnectMongoDB, isMongoConnected } from './services/mongodb.js';
+import { config } from './config/env.js';
 
 // Import Routes
 import navigationRoutes from './routes/navigation/index.js';
@@ -13,7 +14,19 @@ export async function buildApp() {
         logger: true
     });
 
-    await connectMongoDB();
+    let mongoAvailable = false;
+    try {
+        await connectMongoDB();
+        mongoAvailable = true;
+        app.log.info('MongoDB connected');
+    } catch (error) {
+        mongoAvailable = false;
+        if (config.mongodbRequired) {
+            throw error;
+        }
+
+        app.log.warn({ err: error }, 'MongoDB unavailable. Starting in degraded mode (MONGODB_REQUIRED=false).');
+    }
 
     // Global Plugins
     await app.register(cors, {
@@ -28,7 +41,12 @@ export async function buildApp() {
 
     // Health Check
     app.get('/health', async (request, reply) => {
-        return { status: 'ok', timestamp: new Date().toISOString() };
+        const databaseStatus = isMongoConnected() ? 'up' : (mongoAvailable ? 'up' : 'down');
+        return {
+            status: databaseStatus === 'up' ? 'ok' : 'degraded',
+            database: databaseStatus,
+            timestamp: new Date().toISOString()
+        };
     });
 
     // API Routes

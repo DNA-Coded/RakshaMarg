@@ -14,12 +14,17 @@ const TRACKING_ERROR_NOTICE_COOLDOWN_MS = 15000;
 
 type TrackingMode = 'passive' | 'navigation' | 'sos';
 
+interface StartTrackingOptions {
+    notifyContacts?: boolean;
+}
+
 interface NearbySafetyPlace {
     name: string;
     address: string;
     distanceMeters: number;
     location: google.maps.LatLngLiteral;
     placeId?: string;
+    formattedPhoneNumber?: string;
 }
 
 const getDistanceMeters = (
@@ -117,6 +122,7 @@ export const useLiveTracking = (
     const lastNearbySearchOriginRef = useRef<google.maps.LatLngLiteral | null>(null);
     const lastNearbySearchCallAtRef = useRef<number>(0);
     const placesServiceRef = useRef<google.maps.places.PlacesService | null>(null);
+    const placePhoneCacheRef = useRef<Map<string, string | null>>(new Map());
     const nearbySearchRequestIdRef = useRef(0);
     const lastDeviationNoticeAtRef = useRef(0);
     const trackRequestAbortControllerRef = useRef<AbortController | null>(null);
@@ -181,6 +187,37 @@ export const useLiveTracking = (
         const placesService = getPlacesService();
         if (!placesService) return null;
 
+        const getPlacePhoneNumber = async (placeId?: string) => {
+            if (!placeId) return null;
+
+            const cachedPhone = placePhoneCacheRef.current.get(placeId);
+            if (cachedPhone !== undefined) {
+                return cachedPhone;
+            }
+
+            const detailsService = getPlacesService();
+            if (!detailsService) return null;
+
+            return new Promise<string | null>((resolve) => {
+                const request: google.maps.places.PlaceDetailsRequest = {
+                    placeId,
+                    fields: ['formatted_phone_number', 'international_phone_number'],
+                };
+
+                detailsService.getDetails(request, (place, status) => {
+                    if (status !== window.google.maps.places.PlacesServiceStatus.OK || !place) {
+                        placePhoneCacheRef.current.set(placeId, null);
+                        resolve(null);
+                        return;
+                    }
+
+                    const phone = place.formatted_phone_number || place.international_phone_number || null;
+                    placePhoneCacheRef.current.set(placeId, phone);
+                    resolve(phone);
+                });
+            });
+        };
+
         return new Promise((resolve) => {
             const request: google.maps.places.PlaceSearchRequest = {
                 location: currentLocation,
@@ -188,7 +225,7 @@ export const useLiveTracking = (
                 type: placeType,
             };
 
-            placesService.nearbySearch(request, (results, status) => {
+            placesService.nearbySearch(request, async (results, status) => {
                 if (status !== window.google.maps.places.PlacesServiceStatus.OK || !results || results.length === 0) {
                     resolve(null);
                     return;
@@ -212,12 +249,15 @@ export const useLiveTracking = (
                     return;
                 }
 
+                const formattedPhoneNumber = await getPlacePhoneNumber(closest.result.place_id);
+
                 resolve({
                     name: closest.result.name || `Nearest ${placeType}`,
                     address: closest.result.vicinity || closest.result.formatted_address || 'Nearby',
                     distanceMeters: closest.distanceMeters,
                     location: closest.location,
                     placeId: closest.result.place_id,
+                    formattedPhoneNumber: formattedPhoneNumber || undefined,
                 });
             });
         });
@@ -342,7 +382,12 @@ export const useLiveTracking = (
         }, ROUTE_UPDATE_DEBOUNCE_MS);
     };
 
-    const startTracking = (mode: TrackingMode = 'navigation') => {
+    const startTracking = (
+        mode: TrackingMode = 'navigation',
+        options: StartTrackingOptions = {}
+    ) => {
+        const shouldNotifyContacts = options.notifyContacts !== false;
+
         if (!routeResult?.overview_polyline) {
             setTrackingError('Please analyze a route first before starting live tracking.');
             return;
@@ -373,7 +418,7 @@ export const useLiveTracking = (
         armGpsSignalTimeout();
 
         // Notify contacts that tracking started
-        if (notifyTrustedContacts) {
+        if (shouldNotifyContacts && notifyTrustedContacts) {
             notifyTrustedContacts(`🛡️ I've started a journey on Raksha.\nRoute: ${fromLocation} to ${toLocation}.\nTrack my safety status here: ${window.location.href}`);
         }
 

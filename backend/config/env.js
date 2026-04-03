@@ -11,6 +11,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
 export const config = {
+    nodeEnv: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 8000,
     apiKeyHeader: 'x-api-key',
     appApiKey: process.env.APP_API_KEY,
@@ -18,6 +19,8 @@ export const config = {
     geminiApiKey: process.env.GEMINI_API_KEY,
     mongodbUri: process.env.MONGODB_URI,
     mongodbDbName: process.env.MONGODB_DB_NAME || 'rakshamarg',
+    mongodbRequired: (process.env.MONGODB_REQUIRED || 'false').toLowerCase() === 'true',
+    mongodbConnectTimeoutMs: Number(process.env.MONGODB_CONNECT_TIMEOUT_MS || 10000),
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,

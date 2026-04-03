@@ -11,10 +11,15 @@ export async function connectMongoDB() {
     }
 
     await mongoose.connect(config.mongodbUri, {
-        dbName: config.mongodbDbName
+        dbName: config.mongodbDbName,
+        serverSelectionTimeoutMS: config.mongodbConnectTimeoutMs
     });
 
     return mongoose.connection;
+}
+
+export function isMongoConnected() {
+    return mongoose.connection.readyState === 1;
 }
 
 export async function disconnectMongoDB() {

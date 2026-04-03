@@ -355,22 +355,6 @@ const LiveMap: React.FC<LiveMapProps> = ({
                     </div>
                 )}
 
-                {/* Overlay Route Info (Compact) */}
-                {routeResult && (
-                    <div className="absolute bottom-6 right-6 bg-black/90 backdrop-blur-xl rounded-2xl p-5 border border-white/10 shadow-2xl pointer-events-none">
-                        <div className="text-right">
-                            <p className="text-brand-teal font-bold text-3xl leading-none tracking-tight">
-                                {routeResult?.legs?.[0]?.duration?.text || '~25 min'}
-                            </p>
-                            <div className="flex items-center justify-end gap-2 mt-2">
-                                <div className={`w-2 h-2 rounded-full ${getRiskLabel(routeResult?.safety_score || 0).color.replace('text-', 'bg-')}`} />
-                                <p className={`text-xs font-bold uppercase tracking-wider ${getRiskLabel(routeResult?.safety_score || 0).color}`}>
-                                    {getRiskLabel(routeResult?.safety_score || 0).status}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
     );

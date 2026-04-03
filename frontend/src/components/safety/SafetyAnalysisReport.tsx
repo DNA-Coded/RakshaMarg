@@ -9,7 +9,6 @@ interface SafetyAnalysisReportProps {
     setRouteResult: (route: any) => void;
     trustedContacts: any[];
     setShowContactModal: (show: boolean) => void;
-    isTracking: boolean;
     trackingError: string | null;
     isGpsSignalLost: boolean;
     isRouteUpdatesPaused: boolean;
@@ -17,14 +16,14 @@ interface SafetyAnalysisReportProps {
         name: string;
         address: string;
         distanceMeters: number;
+        formattedPhoneNumber?: string;
     } | null;
     nearestPoliceStation: {
         name: string;
         address: string;
         distanceMeters: number;
+        formattedPhoneNumber?: string;
     } | null;
-    startTracking: () => void;
-    stopTracking: () => void;
     handleShareLocation: () => void;
     handleSOS: () => void;
     sosActive: boolean;
@@ -46,14 +45,11 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     setRouteResult,
     trustedContacts,
     setShowContactModal,
-    isTracking,
     trackingError,
     isGpsSignalLost,
     isRouteUpdatesPaused,
     nearestHospital,
     nearestPoliceStation,
-    startTracking,
-    stopTracking,
     handleShareLocation,
     handleSOS,
     sosActive,
@@ -66,6 +62,26 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
 
     if (!routeResult) return null;
     const safeAllRoutes = allRoutes || [];
+    const safestRoute = safeAllRoutes.length > 0 
+        ? safeAllRoutes.reduce((prev, current) => 
+            (current.safety_score > prev.safety_score) ? current : prev
+          )
+        : null;
+    const policeSupport = nearestPoliceStation || routeResult?.emergencySupport?.police || null;
+    const hospitalSupport = nearestHospital || routeResult?.emergencySupport?.hospital || null;
+
+    const policeDistanceLabel = nearestPoliceStation
+        ? `${Math.round(nearestPoliceStation.distanceMeters)}m away`
+        : null;
+
+    const hospitalDistanceLabel = nearestHospital
+        ? `${Math.round(nearestHospital.distanceMeters)}m away`
+        : null;
+
+    const policePhone = nearestPoliceStation?.formattedPhoneNumber || routeResult?.emergencySupport?.police?.formatted_phone_number || '100';
+    const hospitalPhone = nearestHospital?.formattedPhoneNumber || routeResult?.emergencySupport?.hospital?.formatted_phone_number || '108';
+    const isUsingLiveEmergencyData = Boolean(nearestHospital || nearestPoliceStation);
+    const etaText = routeResult?.legs?.[0]?.duration?.text || routeResult?.duration || 'N/A';
 
     return (
         <div className={`space-y-4 transition-all duration-500 ${isFullScreen ? 'lg:col-span-5' : 'lg:col-span-2'}`}>
@@ -95,9 +111,15 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                         <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className={getRiskLabel(routeResult.safety_score).color} strokeDasharray="175.9" strokeDashoffset={175.9 - (175.9 * (routeResult.safety_score || 0)) / 100} strokeLinecap="round" />
                     </svg>
                 </div>
-                <div>
-                    <div className={`text-2xl font-bold ${getRiskLabel(routeResult.safety_score).color}`}>
-                        {getRiskLabel(routeResult.safety_score).label}
+                <div className="flex-1">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <div className={`text-2xl font-bold ${getRiskLabel(routeResult.safety_score).color}`}>
+                            {getRiskLabel(routeResult.safety_score).label}
+                        </div>
+                        <div className="rounded-full border border-brand-teal/40 bg-brand-teal/10 px-3 py-1">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-brand-teal">ETA</span>
+                            <span className="ml-2 text-sm font-bold text-white">{etaText}</span>
+                        </div>
                     </div>
                     <div className="text-sm text-white/50">{getRiskLabel(routeResult.safety_score).status}</div>
                 </div>
@@ -232,7 +254,7 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
             </Button>
 
             {/* Safety Warning for Alternative Selection */}
-            {safeAllRoutes.length > 0 && routeResult !== safeAllRoutes[0] && (
+            {safestRoute && routeResult !== safestRoute && routeResult.safety_score < safestRoute.safety_score && (
                 <div className="bg-red-500/10 rounded-3xl p-5 border border-red-500/20 shadow-lg mt-4 animate-pulse">
                     <div className="flex items-start gap-3">
                         <AlertTriangle className="w-6 h-6 text-red-500 shrink-0" />
@@ -241,14 +263,14 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                 Caution: Safer Route Available
                             </h3>
                             <p className="text-sm text-red-100/70 leading-relaxed">
-                                You have selected a route with a <strong>lower safety score ({routeResult.safety_score})</strong> than the recommended option ({safeAllRoutes[0].safety_score}).
+                                You have selected a route with a <strong>lower safety score ({routeResult.safety_score})</strong> than the recommended option ({safestRoute.safety_score}).
                                 Risk factors like lighting issues may be higher here.
                             </p>
                             <Button
                                 size="sm"
                                 variant="outline"
                                 className="mt-3 bg-red-500/20 border-red-500/30 text-red-100 hover:bg-red-500/30"
-                                onClick={() => setRouteResult(safeAllRoutes[0])}
+                                onClick={() => setRouteResult(safestRoute)}
                             >
                                 Switch to Safest Route
                             </Button>
@@ -259,10 +281,15 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
 
             {/* Nearest Emergency Services (Replaces Safer Alternative) */}
             <div className="bg-white/5 rounded-3xl p-5 border border-white/10 shadow-lg">
-                <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider mb-4 flex items-center gap-2">
-                    <Siren className="w-4 h-4 text-brand-purple" />
-                    Emergency Support Nearby
-                </h3>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                        <Siren className="w-4 h-4 text-brand-purple" />
+                        Emergency Support Nearby
+                    </h3>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${isUsingLiveEmergencyData ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' : 'border-white/20 bg-white/10 text-white/70'}`}>
+                        {isUsingLiveEmergencyData ? 'Live' : 'Route Data'}
+                    </span>
+                </div>
 
                 <div className="space-y-3">
                     {/* Police Station */}
@@ -272,15 +299,18 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                 <Shield className="w-5 h-5 text-blue-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-white max-w-[150px] truncate" title={routeResult?.emergencySupport?.police?.name}>
-                                    {routeResult?.emergencySupport?.police?.name || "Nearest Police Station"}
+                                <p className="text-sm font-bold text-white max-w-[150px] truncate" title={policeSupport?.name}>
+                                    {policeSupport?.name || 'Nearest Police Station'}
                                 </p>
                                 <p className="text-xs text-white/50 truncate max-w-[160px]">
-                                    {routeResult?.emergencySupport?.police?.address || "Location Verified"}
+                                    {policeSupport?.address || 'Location Verified'}
                                 </p>
+                                {policeDistanceLabel && (
+                                    <p className="text-[11px] text-blue-200/80 mt-0.5">{policeDistanceLabel}</p>
+                                )}
                             </div>
                         </div>
-                        <a href={`tel:${routeResult?.emergencySupport?.police?.formatted_phone_number || '100'}`}>
+                        <a href={`tel:${policePhone}`}>
                             <Button size="icon" className="w-9 h-9 rounded-full bg-blue-500 text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20">
                                 <Phone className="w-4 h-4" />
                             </Button>
@@ -296,15 +326,18 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                                 <Hospital className="w-5 h-5 text-red-400" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold text-white max-w-[150px] truncate" title={routeResult?.emergencySupport?.hospital?.name}>
-                                    {routeResult?.emergencySupport?.hospital?.name || "Nearest Hospital"}
+                                <p className="text-sm font-bold text-white max-w-[150px] truncate" title={hospitalSupport?.name}>
+                                    {hospitalSupport?.name || 'Nearest Hospital'}
                                 </p>
                                 <p className="text-xs text-white/50 truncate max-w-[160px]">
-                                    {routeResult?.emergencySupport?.hospital?.address || "Location Verified"}
+                                    {hospitalSupport?.address || 'Location Verified'}
                                 </p>
+                                {hospitalDistanceLabel && (
+                                    <p className="text-[11px] text-red-200/80 mt-0.5">{hospitalDistanceLabel}</p>
+                                )}
                             </div>
                         </div>
-                        <a href={`tel:${routeResult?.emergencySupport?.hospital?.formatted_phone_number || '108'}`}>
+                        <a href={`tel:${hospitalPhone}`}>
                             <Button size="icon" className="w-9 h-9 rounded-full bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20">
                                 <Phone className="w-4 h-4" />
                             </Button>
@@ -335,34 +368,10 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                 </div>
             )}
 
-            {isTracking && (
-                <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <p className="text-xs font-bold uppercase tracking-wider text-white/60">Nearest Live Support</p>
-                    <div className="mt-2 space-y-2">
-                        <p className="text-sm text-white/85">
-                            Hospital: {nearestHospital ? `${nearestHospital.name} (${Math.round(nearestHospital.distanceMeters)}m)` : 'No nearby hospital found'}
-                        </p>
-                        <p className="text-sm text-white/85">
-                            Police: {nearestPoliceStation ? `${nearestPoliceStation.name} (${Math.round(nearestPoliceStation.distanceMeters)}m)` : 'No nearby police station found'}
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex gap-3">
-                <Button
-                    onClick={isTracking ? stopTracking : startTracking}
-                    className={`flex-1 h-14 ${isTracking ? 'bg-green-500 hover:bg-green-600' : 'bg-brand-purple hover:bg-brand-purple/80'} text-white rounded-2xl font-bold shadow-lg`}
-                >
-                    <div className="flex items-center gap-2">
-                        <Navigation className={`w-5 h-5 ${isTracking ? 'animate-pulse' : ''}`} />
-                        <span>{isTracking ? 'Stop Tracking' : 'Start Tracking'}</span>
-                    </div>
-                </Button>
-
+            <div>
                 <Button
                     onClick={handleShareLocation}
-                    className="flex-1 h-14 bg-gradient-to-r from-brand-teal/20 to-brand-purple/20 hover:from-brand-teal/30 hover:to-brand-purple/30 border border-brand-teal/30 text-white rounded-2xl font-bold shadow-lg"
+                    className="w-full h-14 bg-gradient-to-r from-brand-teal/20 to-brand-purple/20 hover:from-brand-teal/30 hover:to-brand-purple/30 border border-brand-teal/30 text-white rounded-2xl font-bold shadow-lg"
                 >
                     <div className="flex items-center gap-2">
                         <Share2 className="w-5 h-5 text-brand-teal" />
