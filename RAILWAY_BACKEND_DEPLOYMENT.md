@@ -32,6 +32,7 @@ Before deployment, keep these ready:
 5. Railway should auto-detect Node.js.
 6. Open service settings and confirm:
    - Root directory: repository root (blank/default)
+   - Build command: `npm install --no-audit` (or leave empty to use `railway.json`)
    - Start command: `npm start`
    - Healthcheck path: `/health`
 
@@ -114,6 +115,8 @@ Then redeploy frontend on Vercel.
 
 - This happens when Railway detects Python from `nirbhaya_bot/requirements.txt` while deploying backend service.
 - Keep repository root deployment and ensure `.railwayignore` is in the deployed commit.
+- In Railway service settings, remove any Python build command if it exists.
+- Set build command to `npm install --no-audit`.
 - Trigger Railway redeploy with `Clear build cache` after pushing updates.
 
 ### Firebase private key format issue
