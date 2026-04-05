@@ -7,8 +7,8 @@ Your frontend remains on Vercel.
 
 The repository is now Railway-ready with:
 
-- `railway.json` at repository root
-- Backend startup command via root script: `npm start` -> `node backend/server.js`
+- `backend/package.json` and `backend/package-lock.json` for backend-only installs
+- `backend/railway.json` for explicit Railway backend service commands
 - `/health` endpoint for Railway health checks
 - Configurable CORS using `CORS_ORIGIN` (recommended for production)
 
@@ -31,13 +31,12 @@ Before deployment, keep these ready:
 4. Click `Deploy from GitHub repo` and select this repository.
 5. Railway should auto-detect Node.js.
 6. Open service settings and confirm:
-   - Root directory: repository root (blank/default)
-   - Build command: `npm install --no-audit` (or leave empty to use `railway.json`)
+   - Root directory: `backend`
+   - Build command: `npm install --no-audit` (or leave empty to use `backend/railway.json`)
    - Start command: `npm start`
    - Healthcheck path: `/health`
 
-This repository uses root-level backend dependencies and scripts (`npm start` -> `node backend/server.js`).
-The included `.railwayignore` excludes `nirbhaya_bot/` from backend deployments so Railway does not trigger Python build detection.
+Using root directory `backend` is the most reliable setup for this monorepo because it completely avoids Python detection from `nirbhaya_bot/requirements.txt`.
 
 ## 4. Add Required Environment Variables in Railway
 
@@ -114,9 +113,9 @@ Then redeploy frontend on Vercel.
 ### Build fails with python: command not found
 
 - This happens when Railway detects Python from `nirbhaya_bot/requirements.txt` while deploying backend service.
-- Keep repository root deployment and ensure `.railwayignore` is in the deployed commit.
+- Set Railway service root directory to `backend`.
 - In Railway service settings, remove any Python build command if it exists.
-- Set build command to `npm install --no-audit`.
+- Set build command to `npm install --no-audit` and start command to `npm start`.
 - Trigger Railway redeploy with `Clear build cache` after pushing updates.
 
 ### Firebase private key format issue
