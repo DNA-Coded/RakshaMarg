@@ -102,6 +102,12 @@ Then redeploy frontend on Vercel.
 
 - Verify `MONGODB_URI`, network access allowlist, username/password, and database user permissions.
 
+### Build fails with npm ci lockfile sync error
+
+- This repository includes `nixpacks.toml` to force `npm install` instead of `npm ci` on Railway.
+- If Railway still shows old behavior, open your service and trigger `Redeploy` with `Clear build cache`.
+- Confirm your latest commit (including `nixpacks.toml`) is deployed.
+
 ### Firebase private key format issue
 
 - Keep newline escapes as `\n` in Railway variable.
