@@ -1,5 +1,9 @@
 # Deployment Guide (Vercel Frontend + Render Backend + Render Chatbot)
 
+If you are deploying backend on Railway (with frontend on Vercel), use the dedicated guide:
+
+- [Railway Backend Deployment Guide](./RAILWAY_BACKEND_DEPLOYMENT.md)
+
 This guide is for manual deployment on free tier, without using Render Blueprint automation.
 
 ## Target Architecture

@@ -10,9 +10,23 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 // Also allow process-level env vars from current working directory .env if present.
 dotenv.config();
 
+function parseCorsOrigin(value) {
+    if (!value || value.trim() === '*') {
+        return '*';
+    }
+
+    const origins = value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+    return origins.length === 1 ? origins[0] : origins;
+}
+
 export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 8000,
+    corsOrigin: parseCorsOrigin(process.env.CORS_ORIGIN),
     apiKeyHeader: 'x-api-key',
     appApiKey: process.env.APP_API_KEY,
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,

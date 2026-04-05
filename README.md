@@ -126,6 +126,7 @@ graph TD
 *   [**Frontend Documentation**](./frontend/README.md) - Setup, and directory structure.
 *   [**Backend Documentation**](./backend/README.md) - API endpoints and server setup.
 *   [**Deployment Guide (Vercel + Render)**](./DEPLOYMENT.md) - Production deployment steps.
+*   [**Railway Backend Deployment Guide**](./RAILWAY_BACKEND_DEPLOYMENT.md) - Deploy backend on Railway with frontend on Vercel.
 
 ---
 
