@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useJsApiLoader } from '@react-google-maps/api';
-import { analyzeRouteSafety, getIncidentDetails, IncidentDetail } from '@/services/navigation';
+import { analyzeRouteSafety, getIncidentDetails, getFriendlyApiError, IncidentDetail } from '@/services/navigation';
 
 const libraries: ("places" | "geometry" | "drawing" | "visualization")[] = ['places', 'geometry'];
 
@@ -329,7 +329,7 @@ export const useRouteSafety = () => {
             }
         } catch (e) {
             console.error("Route analysis error:", e);
-            setError('Failed to analyze route safety. Please try again.');
+            setError(getFriendlyApiError(e, 'Failed to analyze route safety. Please try again.'));
         } finally {
             setIsAnalyzing(false);
         }

@@ -4,7 +4,22 @@ import { API_BASE_URL, API_KEY } from '../config';
 import { getFirebaseIdToken } from '@/lib/firebase';
 
 const getBaseUrl = () => {
-    const base = API_BASE_URL.replace(/\/$/, "");
+    const base = API_BASE_URL.trim().replace(/\/$/, '');
+
+    if (!base) {
+        const host = window.location.hostname;
+        const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+
+        if (isLocalHost) {
+            // Local development uses Vite proxy (/api -> localhost:8000).
+            return '/api/v1/navigation';
+        }
+
+        throw new Error(
+            'Backend URL is not configured. Set VITE_API_BASE_URL to your deployed backend URL.'
+        );
+    }
+
     return base.endsWith('/api/v1/navigation') ? base : `${base}/api/v1/navigation`;
 };
 
@@ -12,14 +27,56 @@ const api = axios.create({
     baseURL: getBaseUrl()
 });
 
+const formatApiError = (error: any, fallback = 'Request failed'): Error => {
+    const status = error?.response?.status;
+    const responseData = error?.response?.data;
+    const responseMessage = responseData?.message || responseData?.error;
+
+    if (status === 401) {
+        return new Error(
+            'Unauthorized (HTTP 401): check that frontend VITE_API_KEY exactly matches backend APP_API_KEY.'
+        );
+    }
+
+    if (responseMessage) {
+        return new Error(status ? `${responseMessage} (HTTP ${status})` : responseMessage);
+    }
+
+    if (error?.message) {
+        return new Error(error.message);
+    }
+
+    return new Error(fallback);
+};
+
+export const getFriendlyApiError = (error: any, fallback: string): string => {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+
+    const formatted = formatApiError(error, fallback);
+    return formatted.message;
+};
+
 api.interceptors.request.use(async (requestConfig) => {
     const token = await getFirebaseIdToken();
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
 
     requestConfig.headers = {
         ...requestConfig.headers,
-        'x-api-key': API_KEY,
         'Content-Type': 'application/json'
     };
+
+    if (!API_KEY && !isLocalHost) {
+        throw new Error(
+            'VITE_API_KEY is missing in production. Set it to the same value as backend APP_API_KEY.'
+        );
+    }
+
+    if (API_KEY) {
+        requestConfig.headers['x-api-key'] = API_KEY;
+    }
 
     if (token) {
         requestConfig.headers.Authorization = `Bearer ${token}`;
@@ -83,7 +140,7 @@ export const analyzeRouteSafety = async (origin: string, destination: string): P
         return response.data;
     } catch (error) {
         console.error('Error analyzing route safety:', error);
-        throw error;
+        throw formatApiError(error, 'Failed to analyze route safety');
     }
 };
 
@@ -107,6 +164,6 @@ export const getIncidentDetails = async (ids: number[]): Promise<IncidentDetail[
         return [];
     } catch (error) {
         console.error('Error fetching incident details:', error);
-        throw error;
+        throw formatApiError(error, 'Failed to fetch incident details');
     }
 };

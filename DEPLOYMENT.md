@@ -171,25 +171,31 @@ Use any API client and call:
 401 Invalid API key:
 
 - Ensure these three are identical:
-  - backend APP_API_KEY
-  - chatbot API_KEY
-  - frontend VITE_API_KEY
+   - backend APP_API_KEY
+   - chatbot API_KEY
+   - frontend VITE_API_KEY
+- Redeploy frontend after changing VITE_API_KEY.
 
 Backend cannot reach chatbot:
 
-- Verify backend NIRBHAYA_SERVICE_URL points to chatbot Render URL.
-- Check chatbot logs for request arrivals.
-- Ensure URL has https and no trailing path.
+- Verify backend NIRBHAYA_SERVICE_URL points to chatbot URL.
+- Ensure URL uses https and has no extra path.
+- Check chatbot service logs for incoming requests.
+
 
 Frontend calls wrong backend:
 
-- Verify VITE_API_BASE_URL is backend URL only.
-- No trailing slash.
-- Redeploy frontend after env changes.
+- Verify VITE_API_BASE_URL points to backend root URL only.
+- Do not add trailing slash.
+- Redeploy frontend after updating env vars.
+
+CORS blocked on preflight (www vs apex mismatch):
+- If frontend is on https://www.rakshamarg.app and backend allows only https://rakshamarg.app, browser blocks requests.
+- Set backend CORS_ORIGIN to include your production origin(s), for example:
+   - https://rakshamarg.app,https://www.rakshamarg.app
+- Redeploy backend after updating env vars.
 
 Render cold start delay on free tier:
-
-- First request after idle can be slow.
 - Retry once after warm-up.
 
 Missing Python or Node dependencies:

@@ -20,7 +20,29 @@ function parseCorsOrigin(value) {
         .map((item) => item.trim())
         .filter(Boolean);
 
-    return origins.length === 1 ? origins[0] : origins;
+    const expanded = new Set();
+
+    for (const origin of origins) {
+        const normalized = origin.replace(/\/$/, '');
+        expanded.add(normalized);
+
+        // If configured with apex domain, also allow www variant (and vice versa).
+        // This prevents common production mismatch: rakshamarg.app vs www.rakshamarg.app.
+        try {
+            const url = new URL(normalized);
+            const hostname = url.hostname;
+            const isWww = hostname.startsWith('www.');
+            const counterpartHost = isWww ? hostname.slice(4) : `www.${hostname}`;
+
+            const counterpart = `${url.protocol}//${counterpartHost}${url.port ? `:${url.port}` : ''}`;
+            expanded.add(counterpart);
+        } catch {
+            // Ignore invalid URL entries and keep original value as-is.
+        }
+    }
+
+    const finalOrigins = Array.from(expanded);
+    return finalOrigins.length === 1 ? finalOrigins[0] : finalOrigins;
 }
 
 export const config = {
