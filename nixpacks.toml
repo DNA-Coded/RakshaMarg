@@ -4,5 +4,8 @@ nixPkgs = ["nodejs_18", "npm-9_x"]
 [phases.install]
 cmds = ["npm install --no-audit"]
 
+[phases.build]
+cmds = ["echo Backend build phase complete"]
+
 [start]
 cmd = "npm start"

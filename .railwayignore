@@ -1,0 +1,12 @@
+# Exclude non-backend apps from Railway backend service build context
+frontend/
+RakshaMargMobile/
+nirbhaya_bot/
+
+# Local environment and heavy folders
+.venv/
+.venv-1/
+node_modules/
+
+# Optional docs/assets not needed for backend build
+*.png

@@ -1,0 +1,15 @@
+# Keep backend deploy context focused for Railway/Nixpacks
+frontend/
+RakshaMargMobile/
+nirbhaya_bot/
+
+# Local and dependency folders
+.venv/
+.venv-1/
+node_modules/
+backend/node_modules/
+
+# VCS and docs
+.git/
+*.md
+*.png

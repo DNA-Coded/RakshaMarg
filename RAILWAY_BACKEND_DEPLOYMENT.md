@@ -31,10 +31,12 @@ Before deployment, keep these ready:
 4. Click `Deploy from GitHub repo` and select this repository.
 5. Railway should auto-detect Node.js.
 6. Open service settings and confirm:
+   - Root directory: repository root (blank/default)
    - Start command: `npm start`
    - Healthcheck path: `/health`
 
-If Railway asks for a root directory, keep it as repository root (blank/default), because the project starts backend from the root `package.json` script.
+This repository uses root-level backend dependencies and scripts (`npm start` -> `node backend/server.js`).
+The included `.railwayignore` excludes `nirbhaya_bot/` from backend deployments so Railway does not trigger Python build detection.
 
 ## 4. Add Required Environment Variables in Railway
 
@@ -107,6 +109,12 @@ Then redeploy frontend on Vercel.
 - This repository includes `nixpacks.toml` to force `npm install` instead of `npm ci` on Railway.
 - If Railway still shows old behavior, open your service and trigger `Redeploy` with `Clear build cache`.
 - Confirm your latest commit (including `nixpacks.toml`) is deployed.
+
+### Build fails with python: command not found
+
+- This happens when Railway detects Python from `nirbhaya_bot/requirements.txt` while deploying backend service.
+- Keep repository root deployment and ensure `.railwayignore` is in the deployed commit.
+- Trigger Railway redeploy with `Clear build cache` after pushing updates.
 
 ### Firebase private key format issue
 
