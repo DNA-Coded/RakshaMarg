@@ -20,7 +20,7 @@ import Footer from '@/components/Footer';
 import { motion } from 'framer-motion';
 import mapImage from '@/assets/map.png';
 import { analyzeRouteSafety, getIncidentDetails, RouteInfo, IncidentDetail } from '@/services/navigation';
-import { API_BASE_URL } from '@/config';
+import { API_BASE_URL, buildNavigationApiUrl } from '@/config';
 import { getAuthHeaders } from '@/lib/apiHeaders';
 import { observeAuthState } from '@/lib/firebaseAuth';
 import { toast } from '@/hooks/use-toast';
@@ -507,7 +507,7 @@ const CheckRoute = () => {
           const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
 
           // Notify backend
-          await fetch(`${API_BASE_URL}/sos`, {
+          await fetch(buildNavigationApiUrl('/sos'), {
             method: 'POST',
             headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({ lat: latitude, lng: longitude, timestamp: new Date().toISOString(), route: routeResult?.summary })

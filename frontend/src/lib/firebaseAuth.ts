@@ -44,6 +44,12 @@ export async function signInWithGoogle() {
             return null;
         }
 
+        if (error?.code === 'auth/unauthorized-domain') {
+            throw new Error(
+                'Google login is blocked because this domain is not authorized in Firebase. Add www.rakshamarg.app to Firebase Authentication > Settings > Authorized domains.'
+            );
+        }
+
         throw error;
     }
 }

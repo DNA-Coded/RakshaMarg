@@ -24,7 +24,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from '@/hooks/use-toast';
-import { API_BASE_URL } from '@/config';
+import { buildNavigationApiUrl } from '@/config';
 import { getAuthHeaders } from '@/lib/apiHeaders';
 import { useRouteContext } from '@/context/RouteContext';
 import nirbhayaLogo from '@/assets/nirbhaya_bot_img.png';
@@ -569,7 +569,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        response = await fetch(`${API_BASE_URL}/api/v1/navigation/chat`, {
+        response = await fetch(buildNavigationApiUrl('/chat'), {
           method: 'POST',
           headers: await getAuthHeaders({
             'Content-Type': 'application/json'

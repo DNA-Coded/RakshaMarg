@@ -56,6 +56,12 @@ Use this exact mapping:
   - VITE_API_BASE_URL = backend service URL from Render (no trailing slash)
   - VITE_API_KEY = SHARED_APP_KEY
   - VITE_GOOGLE_MAPS_API_KEY = browser Maps key
+   - VITE_FIREBASE_API_KEY
+   - VITE_FIREBASE_AUTH_DOMAIN
+   - VITE_FIREBASE_PROJECT_ID
+   - VITE_FIREBASE_STORAGE_BUCKET
+   - VITE_FIREBASE_MESSAGING_SENDER_ID
+   - VITE_FIREBASE_APP_ID
 
 ## Step 1: Deploy Chatbot Service on Render
 
@@ -132,6 +138,12 @@ In Vercel:
    - VITE_API_BASE_URL = https://your-backend-url
    - VITE_API_KEY = same exact shared key
    - VITE_GOOGLE_MAPS_API_KEY = browser key
+   - VITE_FIREBASE_API_KEY
+   - VITE_FIREBASE_AUTH_DOMAIN
+   - VITE_FIREBASE_PROJECT_ID
+   - VITE_FIREBASE_STORAGE_BUCKET
+   - VITE_FIREBASE_MESSAGING_SENDER_ID
+   - VITE_FIREBASE_APP_ID
 5. Deploy
 
 If you edit env vars later, redeploy so frontend gets updated values.
@@ -210,6 +222,18 @@ Google or Gemini key errors:
 
 - Recheck keys in Render env vars.
 - Ensure APIs are enabled on provider dashboard.
+
+Firebase auth not configured (Google/Phone/Guest login fails):
+
+- Add all VITE_FIREBASE_* variables in Vercel frontend environment settings.
+- Use Firebase Web App config values from your Firebase project.
+- Redeploy frontend after updating env vars.
+
+Google login blocked by Firebase authorized domain:
+
+- Add www.rakshamarg.app to Firebase Console > Authentication > Settings > Authorized domains.
+- If you also serve the apex domain, add rakshamarg.app too.
+- This setting must match the exact domain shown in the browser when you click Google login.
 
 ## Security Checklist
 

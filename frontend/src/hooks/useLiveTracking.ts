@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-import { API_BASE_URL } from '../config';
+import { buildNavigationApiUrl } from '../config';
 import { getAuthHeaders } from '@/lib/apiHeaders';
 import { toast } from './use-toast';
 
@@ -485,7 +485,7 @@ export const useLiveTracking = (
                         isTrackRequestInFlightRef.current = true;
 
                         try {
-                            const response = await fetch(`${API_BASE_URL}/track`, {
+                            const response = await fetch(buildNavigationApiUrl('/track'), {
                                 method: 'POST',
                                 headers: await getAuthHeaders({
                                     'Content-Type': 'application/json'

@@ -34,6 +34,7 @@ const Login = () => {
     const [isLoadingGuest, setIsLoadingGuest] = useState(false);
     const [isSendingOtp, setIsSendingOtp] = useState(false);
     const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+    const isFirebaseConfigured = Boolean(auth);
 
     const syncProfile = async () => {
         const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
@@ -108,6 +109,15 @@ const Login = () => {
     };
 
     const handleGoogleLogin = async () => {
+        if (!isFirebaseConfigured) {
+            toast({
+                title: 'Firebase auth not configured',
+                description: 'Set VITE_FIREBASE_* values in frontend environment variables and redeploy.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
         try {
             setIsLoadingGoogle(true);
             const user = await signInWithGoogle();
@@ -139,6 +149,15 @@ const Login = () => {
     };
 
     const handleGuestLogin = async () => {
+        if (!isFirebaseConfigured) {
+            toast({
+                title: 'Firebase auth not configured',
+                description: 'Set VITE_FIREBASE_* values in frontend environment variables and redeploy.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
         try {
             setIsLoadingGuest(true);
             await signInAsGuest();
@@ -161,6 +180,15 @@ const Login = () => {
     };
 
     const handleSendOtp = async () => {
+        if (!isFirebaseConfigured) {
+            toast({
+                title: 'Firebase auth not configured',
+                description: 'Set VITE_FIREBASE_* values in frontend environment variables and redeploy.',
+                variant: 'destructive'
+            });
+            return;
+        }
+
         try {
             if (!auth) {
                 throw new Error('Firebase auth is not configured.');
@@ -289,6 +317,12 @@ const Login = () => {
                         </CardHeader>
 
                         <CardContent className="space-y-5 pb-6">
+                            {!isFirebaseConfigured ? (
+                                <div className="rounded-md border border-amber-300/40 bg-amber-300/10 p-3 text-xs text-amber-100 sm:text-sm">
+                                    Firebase auth is not configured in this deployment. Add all required VITE_FIREBASE_* variables in Vercel and redeploy.
+                                </div>
+                            ) : null}
+
                             <Tabs defaultValue="google" className="w-full">
                                 <TabsList className="grid h-auto w-full grid-cols-3 rounded-md border border-white/10 bg-white/10 p-1">
                                 <TabsTrigger
@@ -315,7 +349,7 @@ const Login = () => {
                                 <p className="text-xs text-white/65 sm:text-sm">Fastest option for full account sync.</p>
                                 <Button
                                     onClick={handleGoogleLogin}
-                                    disabled={isLoadingGoogle}
+                                    disabled={!isFirebaseConfigured || isLoadingGoogle}
                                     className="h-11 w-full rounded-md bg-white text-brand-dark hover:bg-brand-teal hover:text-white"
                                 >
                                     {isLoadingGoogle ? 'Signing in...' : 'Continue with Google'}
@@ -332,7 +366,7 @@ const Login = () => {
 
                                 <Button
                                     onClick={handleSendOtp}
-                                    disabled={isSendingOtp}
+                                    disabled={!isFirebaseConfigured || isSendingOtp}
                                     className="h-11 w-full rounded-md bg-brand-purple text-white hover:bg-brand-purple/90"
                                 >
                                     {isSendingOtp ? 'Sending OTP...' : 'Send OTP'}
@@ -348,7 +382,7 @@ const Login = () => {
                                         />
                                         <Button
                                             onClick={handleVerifyOtp}
-                                            disabled={isVerifyingOtp}
+                                            disabled={!isFirebaseConfigured || isVerifyingOtp}
                                             className="h-11 w-full rounded-md bg-white text-brand-dark hover:bg-brand-teal hover:text-white"
                                         >
                                             {isVerifyingOtp ? 'Verifying...' : 'Verify OTP'}
@@ -362,7 +396,7 @@ const Login = () => {
                             <TabsContent value="guest" className="mt-4">
                                 <Button
                                     onClick={handleGuestLogin}
-                                    disabled={isLoadingGuest}
+                                    disabled={!isFirebaseConfigured || isLoadingGuest}
                                     className="h-11 w-full rounded-md bg-white text-brand-dark hover:bg-brand-teal hover:text-white"
                                 >
                                     {isLoadingGuest ? 'Signing in...' : 'Continue as Guest'}
