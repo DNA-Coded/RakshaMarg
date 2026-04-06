@@ -93,6 +93,35 @@ When responding:
 - Connect to RakshaMarg features (trusted contacts, SOS, route suggestions)
 - Monitor for danger signals and escalate when needed`;
 
+const COMPANION_RESPONSE_RULES = `Response style rules:
+- Act like a calm travel companion, not a generic FAQ bot.
+- Start by acknowledging the user's concern in one short sentence.
+- Answer the actual question directly using the route or journey context.
+- Give 2 to 4 practical next steps that fit the user's situation.
+- If the user asks about travelling alone, be honest about risk and suggest safer alternatives when the route is moderate or high risk.
+- If the user asks for tips, make them specific to the time of day, route safety, and nearby safe places.
+- Avoid repeating the same sentence structure across replies.
+- Do not just restate the safety score; explain what it means for this person right now.
+- End with one helpful follow-up offer such as asking if they want nearby safe places, an alternate route, or a check-in reminder.`;
+
+function buildCompanionBrief(userMessage, isEmergency, isAnxiety, isSafetyInquiry) {
+  const lowered = userMessage.toLowerCase();
+
+  if (isEmergency) {
+    return 'The user may be in immediate danger. Prioritize fast, clear instructions. Do not sound generic or ceremonial. Tell them exactly what to do next.';
+  }
+
+  if (isAnxiety || lowered.includes('alone') || lowered.includes('travel')) {
+    return 'The user is asking for companionship while traveling. Respond with reassurance, a direct answer about whether it is wise to travel now, and a short set of protective steps.';
+  }
+
+  if (isSafetyInquiry) {
+    return 'The user wants a safety judgment or travel advice. Explain the risk in plain language, then give practical steps they can use immediately.';
+  }
+
+  return 'Keep the answer supportive, personal, and route-aware. Use the user\'s journey context, and do not repeat the same generic safety sentence.';
+}
+
 export const safetyAssistant = {
   /**
    * Analyze user message and provide safety guidance
@@ -157,6 +186,8 @@ export const safetyAssistant = {
       }
     }
 
+    const companionBrief = buildCompanionBrief(userMessage, isEmergency, isAnxiety, isSafetyInquiry);
+
     // Build messages for conversational context
     const messages = [
       ...conversationHistory.map(msg => ({
@@ -166,7 +197,7 @@ export const safetyAssistant = {
       {
         role: 'user',
         parts: [{
-          text: `${userMessage}${journeyContextStr}`
+          text: `${companionBrief}\n\nLatest user message: ${userMessage}${journeyContextStr}`
         }]
       }
     ];
@@ -174,7 +205,13 @@ export const safetyAssistant = {
     try {
       const result = await model.generateContent({
         contents: messages,
-        systemInstruction: NIRBHAYA_SYSTEM_PROMPT
+        systemInstruction: `${NIRBHAYA_SYSTEM_PROMPT}\n\n${COMPANION_RESPONSE_RULES}`,
+        generationConfig: {
+          temperature: 0.8,
+          topP: 0.92,
+          topK: 40,
+          maxOutputTokens: 500
+        }
       });
 
       const response = await result.response;
@@ -267,9 +304,11 @@ export const safetyAssistant = {
       if (isEmergency) {
         fallbackResponse = 'I detected a possible emergency. Activate SOS now, move to a crowded or well-lit area, and call emergency services (100 in India). Keep your phone unlocked and location sharing on.';
       } else if (isAnxiety) {
-        fallbackResponse = `${scoreHint} You are not alone. Take slow breaths, stay in populated areas, and share your live location with a trusted contact right now.`;
+        fallbackResponse = `${scoreHint} You are not alone. I can stay with you through this. Take slow breaths, stay in populated areas, and share your live location with a trusted contact right now. If you want, I can also help you check the safest next step for this route.`;
       } else if (isSafetyInquiry) {
-        fallbackResponse = `${scoreHint} Choose routes with better lighting, more people, and nearby police or hospital access. ${timeHint}`;
+        fallbackResponse = `${scoreHint} For this route, look for busy main roads, better lighting, and easy access to police or hospitals. ${timeHint} If you want, I can help you compare another route or suggest nearby safe stops.`;
+      } else {
+        fallbackResponse = `I am here with you. ${scoreHint} ${timeHint} Tell me your route, time, or concern and I will help you think it through step by step.`;
       }
 
       let suggestedActions = [];

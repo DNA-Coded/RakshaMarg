@@ -256,6 +256,45 @@ When responding based on real route data:
 - Connect to RakshaMarg features (trusted contacts, SOS, route alternatives)
 - Monitor for danger signals and escalate when needed"""
 
+COMPANION_RESPONSE_RULES = """Response style rules:
+- Act like a calm travel companion, not a generic FAQ bot.
+- Start by acknowledging the user's feeling or concern in one short sentence.
+- Answer the actual question directly using the live journey context when available.
+- Give 2 to 4 practical next steps that fit the user's situation.
+- If the user seems unsure about traveling alone, be honest and suggest safer alternatives when risk is moderate or high.
+- If the user asks for tips, make them specific to the route, time of day, and nearby safe places.
+- Avoid repeating the same sentence structure across replies.
+- Do not just restate the safety score; explain what it means for this person right now.
+- End with one helpful follow-up offer such as asking if they want nearby safe places, an alternate route, or a check-in reminder.
+"""
+
+
+def build_companion_brief(user_message: str, is_emergency: bool, is_anxiety: bool, is_safety_inquiry: bool) -> str:
+    lowered = user_message.lower()
+
+    if is_emergency:
+        return (
+            "The user may be in immediate danger. Prioritize fast, clear instructions. "
+            "Do not sound generic or ceremonial. Tell them exactly what to do next."
+        )
+
+    if is_anxiety or "alone" in lowered or "travel" in lowered:
+        return (
+            "The user is asking for companionship while traveling. Respond with reassurance, "
+            "a direct answer about whether it is wise to travel now, and a short set of protective steps."
+        )
+
+    if is_safety_inquiry:
+        return (
+            "The user wants a safety judgment or travel advice. Explain the risk in plain language, "
+            "then give practical steps they can use immediately."
+        )
+
+    return (
+        "Keep the answer supportive, personal, and route-aware. Use the user's journey context, "
+        "and do not repeat the same generic safety sentence."
+    )
+
 class NirbhayaAssistant:
     """Nirbhaya AI Safety Assistant"""
     
@@ -488,6 +527,7 @@ class NirbhayaAssistant:
         journey_context_str = self.build_journey_context(context)
         route_context_str = self.build_route_context(route_context)
         suggested_actions = self._build_suggested_actions(is_emergency, is_anxiety, is_safety_inquiry)
+        companion_brief = build_companion_brief(user_message, is_emergency, is_anxiety, is_safety_inquiry)
 
         messages = []
         for msg in history:
@@ -496,7 +536,11 @@ class NirbhayaAssistant:
                 "parts": [{"text": msg.content}]
             })
 
-        full_message = f"{user_message}{route_context_str}{journey_context_str}"
+        full_message = (
+            f"{companion_brief}\n\n"
+            f"Latest user message: {user_message}\n"
+            f"{route_context_str}{journey_context_str}"
+        )
         messages.append({
             "role": "user",
             "parts": [{"text": full_message}]
@@ -505,7 +549,7 @@ class NirbhayaAssistant:
         full_conversation = [
             {
                 "role": "user",
-                "parts": [{"text": NIRBHAYA_SYSTEM_PROMPT}]
+                "parts": [{"text": f"{NIRBHAYA_SYSTEM_PROMPT}\n\n{COMPANION_RESPONSE_RULES}"}]
             },
             {
                 "role": "model",
@@ -525,11 +569,19 @@ class NirbhayaAssistant:
                 response = self.model.generate_content(
                     contents=full_conversation,
                     generation_config=genai.types.GenerationConfig(
-                        temperature=0.7,
+                        temperature=0.8,
+                        top_p=0.92,
+                        top_k=40,
                         max_output_tokens=500
                     )
                 )
                 assistant_message = response.text.strip()
+
+            if is_safety_inquiry and assistant_message:
+                assistant_message = assistant_message.replace(
+                    "I could not access full route scoring right now.",
+                    "I can still help you think this through based on the route details you already have."
+                )
 
             chat_response = ChatResponse(
                 response=assistant_message,
