@@ -3,6 +3,7 @@ import { geminiService } from '../../services/geminiService.js';
 import { safetyAssistant } from '../../services/safetyAssistant.js';
 import { safetyRouteController } from '../../controllers/safetyRouteController.js';
 import { incidentDetailsController } from '../../controllers/incidentDetailsController.js';
+import { config } from '../../config/env.js';
 // import { firebaseService } from '../../services/firebase.js';
 
 
@@ -426,8 +427,8 @@ export default async function (fastify, opts) {
             }
 
             // Proxy request to Python Nirbhaya service
-            const nirbhayaUrl = process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001';
-            const apiKey = process.env.APP_API_KEY;
+            const nirbhayaUrl = config.nirbhayaServiceUrl || 'http://localhost:8001';
+            const apiKey = config.appApiKey;
             const requestPayload = {
                 message,
                 conversationHistory,
@@ -436,7 +437,7 @@ export default async function (fastify, opts) {
             };
 
             const fallbackToNodeAssistant = async (reason) => {
-                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext);
+                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext, routeContext);
                 return {
                     ...fallbackResult,
                     meta: {
@@ -445,6 +446,19 @@ export default async function (fastify, opts) {
                     }
                 };
             };
+
+            const shouldSkipProxy = (() => {
+                try {
+                    const target = new URL(nirbhayaUrl);
+                    return Boolean(target.pathname && target.pathname !== '/');
+                } catch {
+                    return true;
+                }
+            })();
+
+            if (shouldSkipProxy) {
+                return await fallbackToNodeAssistant('invalid_or_missing_nirbhaya_service_url');
+            }
 
             const callNirbhaya = async () => fetch(`${nirbhayaUrl}/chat`, {
                 method: 'POST',
@@ -463,10 +477,6 @@ export default async function (fastify, opts) {
             }
 
             if (!response.ok) {
-                if (response.status >= 500) {
-                    return await fallbackToNodeAssistant(`upstream_${response.status}`);
-                }
-
                 let errorData = null;
                 let rawBody = '';
 
@@ -496,6 +506,17 @@ export default async function (fastify, opts) {
                     ...(detail?.retryAfterSeconds ? { retryAfterSeconds: detail.retryAfterSeconds } : {})
                 };
 
+                // Keep chat available even when upstream service URL is misconfigured or temporarily unavailable.
+                if (
+                    response.status >= 500 ||
+                    response.status === 404 ||
+                    response.status === 401 ||
+                    response.status === 403 ||
+                    /Route POST:\/\/chat not found/i.test(message)
+                ) {
+                    return await fallbackToNodeAssistant(`upstream_${response.status}`);
+                }
+
                 if (detail && typeof detail === 'object') {
                     payload.meta = detail;
                 }
@@ -513,7 +534,7 @@ export default async function (fastify, opts) {
 
             try {
                 const { message, conversationHistory = [], journeyContext = {} } = request.body;
-                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext);
+                const fallbackResult = await safetyAssistant.chat(message, conversationHistory, journeyContext, routeContext);
                 return {
                     ...fallbackResult,
                     meta: {

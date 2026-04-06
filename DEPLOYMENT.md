@@ -193,6 +193,7 @@ Backend cannot reach chatbot:
 - Verify backend NIRBHAYA_SERVICE_URL points to chatbot URL.
 - Ensure URL uses https and has no extra path.
 - Check chatbot service logs for incoming requests.
+- Do not set NIRBHAYA_SERVICE_URL to the backend URL itself. That causes chat calls to loop and return `Route POST://chat not found`.
 
 
 Frontend calls wrong backend:

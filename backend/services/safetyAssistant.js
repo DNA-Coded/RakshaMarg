@@ -98,7 +98,7 @@ export const safetyAssistant = {
    * Analyze user message and provide safety guidance
    * Returns: { response, isEmergency, isAnxiety, isSafetyInquiry, suggestedActions }
    */
-  async chat(userMessage, conversationHistory = [], journeyContext = {}) {
+  async chat(userMessage, conversationHistory = [], journeyContext = {}, routeContext = null) {
     if (!model) {
       console.warn('Gemini API Key missing, unable to initialize Nirbhaya');
       return {
@@ -137,6 +137,24 @@ export const safetyAssistant = {
     }
     if (journeyContext.isNightTime) {
       journeyContextStr += `\n⚠️ NIGHT TIME: Extra caution recommended for low-visibility areas`;
+    }
+
+    if (routeContext) {
+      if (typeof routeContext.safetyScore === 'number') {
+        journeyContextStr += `\nRoute Safety Score: ${routeContext.safetyScore}/100`;
+      }
+      if (routeContext.riskLevel) {
+        journeyContextStr += `\nRisk Level: ${routeContext.riskLevel}`;
+      }
+      if (Array.isArray(routeContext.incidents) && routeContext.incidents.length > 0) {
+        journeyContextStr += `\nIncidents Reported: ${routeContext.incidents.length}`;
+      }
+      if (routeContext.hospitals) {
+        journeyContextStr += `\nNearest Hospital: ${routeContext.hospitals.name || 'Nearby hospital'}`;
+      }
+      if (routeContext.policeStation) {
+        journeyContextStr += `\nNearest Police Station: ${routeContext.policeStation.name || 'Nearby police station'}`;
+      }
     }
 
     // Build messages for conversational context
