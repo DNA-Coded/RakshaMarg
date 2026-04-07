@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 const features = [
   {
     icon: Shield,
-    title: 'Nivriti Panday',
+    title: 'Nirbhaya AI Chatbot',
     description: 'Predictive algorithms analyze historical data to flag unsafe zones before you enter them.',
     className: "md:col-span-2 md:row-span-1 bg-gradient-to-br from-brand-purple/20 to-brand-dark border-brand-purple/20",
     iconClass: "text-brand-purple"
