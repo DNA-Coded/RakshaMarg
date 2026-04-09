@@ -397,6 +397,11 @@ const CheckRoute = () => {
     isRouteUpdatesPaused,
     nearestHospital,
     nearestPoliceStation,
+    currentWeather,
+    weatherAlerts,
+    weatherUpdatedAt,
+    weatherStatus,
+    weatherReason,
     userBearing,
     startTracking,
     stopTracking
@@ -577,6 +582,10 @@ const CheckRoute = () => {
       userLiveLocation={userLiveLocation || initialCoordinates}
       nearestHospital={nearestHospital}
       nearestPoliceStation={nearestPoliceStation}
+      currentWeather={currentWeather}
+      weatherAlerts={weatherAlerts}
+      weatherStatus={weatherStatus}
+      weatherReason={weatherReason}
       userBearing={userBearing}
       isFullScreen={isFullScreen}
       setIsFullScreen={setIsFullScreen}
@@ -671,6 +680,12 @@ const CheckRoute = () => {
                   isRouteUpdatesPaused={isRouteUpdatesPaused}
                   nearestHospital={nearestHospital}
                   nearestPoliceStation={nearestPoliceStation}
+                  currentWeather={currentWeather}
+                  weatherAlerts={weatherAlerts}
+                  weatherUpdatedAt={weatherUpdatedAt}
+                  weatherStatus={weatherStatus}
+                  weatherReason={weatherReason}
+                  isTracking={isTracking}
                   handleShareLocation={handleShareLocation}
                   handleSOS={handleSOS}
                   sosActive={sosActive}

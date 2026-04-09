@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { buildNavigationApiUrl } from '../config';
 import { getAuthHeaders } from '@/lib/apiHeaders';
 import { toast } from './use-toast';
+import { getWeatherAlerts, WeatherAlert, WeatherSnapshot } from '@/services/navigation';
 
 const ROUTE_RECALC_MIN_DISTANCE_METERS = 15;
 const ROUTE_RECALC_MIN_INTERVAL_MS = 5000;
@@ -11,6 +12,8 @@ const GPS_SIGNAL_TIMEOUT_MS = 20000;
 const ROUTE_UPDATE_BACKOFF_MS = [5000, 10000, 20000] as const;
 const DEVIATION_NOTICE_COOLDOWN_MS = 30000;
 const TRACKING_ERROR_NOTICE_COOLDOWN_MS = 15000;
+const WEATHER_CHECK_MIN_MOVEMENT_METERS = 150;
+const WEATHER_CHECK_MIN_INTERVAL_MS = 60000;
 
 type TrackingMode = 'passive' | 'navigation' | 'sos';
 
@@ -106,6 +109,11 @@ export const useLiveTracking = (
     const [nearestHospital, setNearestHospital] = useState<NearbySafetyPlace | null>(null);
     const [nearestPoliceStation, setNearestPoliceStation] = useState<NearbySafetyPlace | null>(null);
     const [userBearing, setUserBearing] = useState<number>(0);
+    const [currentWeather, setCurrentWeather] = useState<WeatherSnapshot | null>(null);
+    const [weatherAlerts, setWeatherAlerts] = useState<WeatherAlert[]>([]);
+    const [weatherUpdatedAt, setWeatherUpdatedAt] = useState<string | null>(null);
+    const [weatherStatus, setWeatherStatus] = useState<string>('idle');
+    const [weatherReason, setWeatherReason] = useState<string | null>(null);
 
     const watchIdRef = useRef<number | null>(null);
     const lastApiCallRef = useRef<number>(0);
@@ -130,6 +138,11 @@ export const useLiveTracking = (
     const isTrackingActiveRef = useRef(false);
     const isMountedRef = useRef(true);
     const lastTrackingErrorNoticeAtRef = useRef(0);
+    const isWeatherRequestInFlightRef = useRef(false);
+    const lastWeatherLocationRef = useRef<google.maps.LatLngLiteral | null>(null);
+    const lastWeatherCheckAtRef = useRef(0);
+    const lastWeatherAlertSignatureRef = useRef('');
+    const lastWeatherSeverityRef = useRef('none');
 
     const clearGpsSignalTimeout = () => {
         if (gpsSignalTimeoutRef.current !== null) {
@@ -312,6 +325,77 @@ export const useLiveTracking = (
         return true;
     };
 
+    const shouldCheckWeather = (currentLocation: google.maps.LatLngLiteral) => {
+        const now = Date.now();
+        const lastLocation = lastWeatherLocationRef.current;
+        const hasMovedEnough = !lastLocation || getDistanceMeters(lastLocation, currentLocation) >= WEATHER_CHECK_MIN_MOVEMENT_METERS;
+        const intervalElapsed = now - lastWeatherCheckAtRef.current >= WEATHER_CHECK_MIN_INTERVAL_MS;
+
+        return hasMovedEnough || intervalElapsed;
+    };
+
+    const rankSeverity = (severity: string) => {
+        switch (severity) {
+            case 'extreme':
+                return 4;
+            case 'severe':
+                return 3;
+            case 'moderate':
+                return 2;
+            case 'low':
+                return 1;
+            case 'none':
+            default:
+                return 0;
+        }
+    };
+
+    const updateWeatherState = async (latitude: number, longitude: number, routePolyline?: string) => {
+        if (!navigator.onLine || isWeatherRequestInFlightRef.current) {
+            return;
+        }
+
+        const location = { lat: latitude, lng: longitude };
+        if (!shouldCheckWeather(location)) {
+            return;
+        }
+
+        isWeatherRequestInFlightRef.current = true;
+
+        try {
+            const weatherResponse = await getWeatherAlerts(latitude, longitude, routePolyline);
+
+            if (!isTrackingActiveRef.current || !isMountedRef.current) {
+                return;
+            }
+
+            lastWeatherLocationRef.current = location;
+            lastWeatherCheckAtRef.current = Date.now();
+            setWeatherStatus(weatherResponse.status || 'ok');
+            setWeatherReason(weatherResponse.reason || null);
+            setCurrentWeather(weatherResponse.current || null);
+            setWeatherUpdatedAt(weatherResponse.updatedAt || new Date().toISOString());
+
+            const nextAlerts = Array.isArray(weatherResponse.alerts) ? weatherResponse.alerts : [];
+            const nextSignature = JSON.stringify(nextAlerts.map((alert) => `${alert.type}:${alert.severity}`));
+            const nextSeverity = weatherResponse.highestSeverity || 'none';
+            const shouldUpdateAlerts =
+                nextSignature !== lastWeatherAlertSignatureRef.current ||
+                rankSeverity(nextSeverity) > rankSeverity(lastWeatherSeverityRef.current);
+
+            if (shouldUpdateAlerts) {
+                setWeatherAlerts(nextAlerts);
+                lastWeatherAlertSignatureRef.current = nextSignature;
+                lastWeatherSeverityRef.current = nextSeverity;
+            }
+        } catch (error) {
+            console.error('Weather check failed:', error);
+            setWeatherStatus('error');
+        } finally {
+            isWeatherRequestInFlightRef.current = false;
+        }
+    };
+
     const resetRouteUpdateBackoff = () => {
         routeUpdateFailureCountRef.current = 0;
         routeUpdateNextAttemptAtRef.current = 0;
@@ -412,8 +496,17 @@ export const useLiveTracking = (
         lastNearbySearchCallAtRef.current = 0;
         setNearestHospital(null);
         setNearestPoliceStation(null);
+        setCurrentWeather(null);
+        setWeatherAlerts([]);
+        setWeatherUpdatedAt(null);
+        setWeatherStatus('idle');
+        setWeatherReason(null);
         resetRouteUpdateBackoff();
         lastDeviationNoticeAtRef.current = 0;
+        lastWeatherCheckAtRef.current = 0;
+        lastWeatherLocationRef.current = null;
+        lastWeatherAlertSignatureRef.current = '';
+        lastWeatherSeverityRef.current = 'none';
         trackingModeRef.current = mode;
         armGpsSignalTimeout();
 
@@ -528,6 +621,12 @@ export const useLiveTracking = (
 
                                 scheduleRouteUpdate(currentLocation);
                             }
+
+                            const routePolyline = typeof routeResult.overview_polyline === 'string'
+                                ? routeResult.overview_polyline
+                                : routeResult?.overview_polyline?.points;
+
+                            await updateWeatherState(latitude, longitude, routePolyline);
                         } catch (error) {
                             if ((error as Error)?.name === 'AbortError') {
                                 return;
@@ -595,8 +694,17 @@ export const useLiveTracking = (
         lastNearbySearchCallAtRef.current = 0;
         setNearestHospital(null);
         setNearestPoliceStation(null);
+        setCurrentWeather(null);
+        setWeatherAlerts([]);
+        setWeatherUpdatedAt(null);
+        setWeatherStatus('idle');
+        setWeatherReason(null);
         resetRouteUpdateBackoff();
         lastDeviationNoticeAtRef.current = 0;
+        lastWeatherCheckAtRef.current = 0;
+        lastWeatherLocationRef.current = null;
+        lastWeatherAlertSignatureRef.current = '';
+        lastWeatherSeverityRef.current = 'none';
         abortTrackRequest();
         clearGpsSignalTimeout();
         clearRouteDebounce();
@@ -659,6 +767,11 @@ export const useLiveTracking = (
         isRouteUpdatesPaused,
         nearestHospital,
         nearestPoliceStation,
+        currentWeather,
+        weatherAlerts,
+        weatherUpdatedAt,
+        weatherStatus,
+        weatherReason,
         userBearing,
         startTracking,
         stopTracking

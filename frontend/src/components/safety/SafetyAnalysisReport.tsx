@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Shield, UserPlus, AlertTriangle, CheckCircle, Info, Navigation, Siren, Phone, Hospital, Share2 } from 'lucide-react';
+import { Shield, UserPlus, AlertTriangle, CheckCircle, Info, Navigation, Siren, Phone, Hospital, Share2, CloudSun, Wind, Sun, CloudRain, Zap, CloudFog, ThermometerSun } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { WeatherAlert, WeatherSnapshot } from '@/services/navigation';
 
 interface SafetyAnalysisReportProps {
     routeResult: any;
@@ -24,6 +25,12 @@ interface SafetyAnalysisReportProps {
         distanceMeters: number;
         formattedPhoneNumber?: string;
     } | null;
+    currentWeather: WeatherSnapshot | null;
+    weatherAlerts: WeatherAlert[];
+    weatherUpdatedAt: string | null;
+    weatherStatus: string;
+    weatherReason: string | null;
+    isTracking: boolean;
     handleShareLocation: () => void;
     handleSOS: () => void;
     sosActive: boolean;
@@ -39,6 +46,77 @@ const getRiskLabel = (score: number) => {
     return { label: 'HIGH RISK', color: 'text-red-500', status: 'Avoid if possible' };
 };
 
+const severityRank: Record<string, number> = {
+    none: 0,
+    low: 1,
+    moderate: 2,
+    severe: 3,
+    extreme: 4,
+};
+
+const getHighestWeatherSeverity = (alerts: WeatherAlert[]) => {
+    return alerts.reduce((highest, alert) => {
+        const current = String(alert.severity || 'none').toLowerCase();
+        return (severityRank[current] || 0) > (severityRank[highest] || 0) ? current : highest;
+    }, 'none');
+};
+
+const getWeatherSeverityStyles = (severity: string) => {
+    switch (severity) {
+        case 'extreme':
+            return 'border-red-500/40 bg-red-500/20 text-red-100';
+        case 'severe':
+            return 'border-orange-500/40 bg-orange-500/20 text-orange-100';
+        case 'moderate':
+            return 'border-amber-500/40 bg-amber-500/20 text-amber-100';
+        case 'low':
+            return 'border-sky-500/40 bg-sky-500/20 text-sky-100';
+        default:
+            return 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100';
+    }
+};
+
+const getWeatherAlertIcon = (type: string) => {
+    const normalized = String(type || '').toLowerCase();
+
+    if (normalized.includes('thunder')) return Zap;
+    if (normalized.includes('rain') || normalized.includes('flood')) return CloudRain;
+    if (normalized.includes('visibility') || normalized.includes('fog')) return CloudFog;
+    if (normalized.includes('wind')) return Wind;
+    if (normalized.includes('temperature') || normalized.includes('heat')) return ThermometerSun;
+    return Sun;
+};
+
+const getConditionIcon = (condition: string) => {
+    const normalized = String(condition || '').toLowerCase();
+
+    if (normalized.includes('thunder')) return Zap;
+    if (normalized.includes('rain') || normalized.includes('drizzle')) return CloudRain;
+    if (normalized.includes('visibility') || normalized.includes('fog') || normalized.includes('haze')) return CloudFog;
+    if (normalized.includes('wind')) return Wind;
+    if (normalized.includes('clear') || normalized.includes('sun')) return Sun;
+
+    return CloudSun;
+};
+
+const formatRelativeTime = (timestamp: string | null) => {
+    if (!timestamp) return null;
+    const timeMs = new Date(timestamp).getTime();
+
+    if (!Number.isFinite(timeMs)) return null;
+
+    const deltaMs = Date.now() - timeMs;
+    const minutes = Math.floor(deltaMs / 60000);
+
+    if (minutes <= 0) return 'just now';
+    if (minutes === 1) return '1 minute ago';
+    if (minutes < 60) return `${minutes} minutes ago`;
+
+    const hours = Math.floor(minutes / 60);
+    if (hours === 1) return '1 hour ago';
+    return `${hours} hours ago`;
+};
+
 const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     routeResult,
     allRoutes,
@@ -50,6 +128,12 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     isRouteUpdatesPaused,
     nearestHospital,
     nearestPoliceStation,
+    currentWeather,
+    weatherAlerts,
+    weatherUpdatedAt,
+    weatherStatus,
+    weatherReason,
+    isTracking,
     handleShareLocation,
     handleSOS,
     sosActive,
@@ -59,6 +143,9 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     isFullScreen
 }) => {
     const [showAllIncidents, setShowAllIncidents] = useState(false);
+    const [relativeUpdatedAt, setRelativeUpdatedAt] = useState<string | null>(formatRelativeTime(weatherUpdatedAt));
+    const [isSeverityEscalated, setIsSeverityEscalated] = useState(false);
+    const previousWeatherSeverityRef = useRef('none');
 
     if (!routeResult) return null;
     const safeAllRoutes = allRoutes || [];
@@ -82,22 +169,48 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
     const hospitalPhone = nearestHospital?.formattedPhoneNumber || routeResult?.emergencySupport?.hospital?.formatted_phone_number || '108';
     const isUsingLiveEmergencyData = Boolean(nearestHospital || nearestPoliceStation);
     const etaText = routeResult?.legs?.[0]?.duration?.text || routeResult?.duration || 'N/A';
+    const hasWeatherAlerts = weatherAlerts.length > 0;
+    const highestSeverity = getHighestWeatherSeverity(weatherAlerts);
+    const weatherUpdatedTimeMs = weatherUpdatedAt ? new Date(weatherUpdatedAt).getTime() : null;
+    const isWeatherDataStale = Boolean(weatherUpdatedTimeMs && Date.now() - weatherUpdatedTimeMs > 5 * 60 * 1000);
+    const weatherStatusLabel = (() => {
+        if (!isTracking) return 'Monitoring Off';
+        if (weatherStatus === 'error') return 'Unavailable';
+        if (weatherStatus === 'unavailable') return 'Unavailable';
+        if (isWeatherDataStale) return 'Stale';
+        return hasWeatherAlerts ? 'Active Alerts' : 'Clear';
+    })();
+
+    useEffect(() => {
+        setRelativeUpdatedAt(formatRelativeTime(weatherUpdatedAt));
+
+        if (!weatherUpdatedAt) {
+            return;
+        }
+
+        const timerId = window.setInterval(() => {
+            setRelativeUpdatedAt(formatRelativeTime(weatherUpdatedAt));
+        }, 30000);
+
+        return () => window.clearInterval(timerId);
+    }, [weatherUpdatedAt]);
+
+    useEffect(() => {
+        const previous = previousWeatherSeverityRef.current;
+        const isEscalated = (severityRank[highestSeverity] || 0) > (severityRank[previous] || 0);
+
+        if (isEscalated && highestSeverity !== 'none') {
+            setIsSeverityEscalated(true);
+            const timeoutId = window.setTimeout(() => setIsSeverityEscalated(false), 1800);
+            previousWeatherSeverityRef.current = highestSeverity;
+            return () => window.clearTimeout(timeoutId);
+        }
+
+        previousWeatherSeverityRef.current = highestSeverity;
+    }, [highestSeverity]);
 
     return (
         <div className={`space-y-4 transition-all duration-500 ${isFullScreen ? 'lg:col-span-5' : 'lg:col-span-2'}`}>
-            {/* Trusted Contacts Button */}
-            <Button
-                onClick={() => setShowContactModal(true)}
-                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl h-12 flex items-center justify-between px-4 mb-4"
-            >
-                <div className="flex items-center gap-2">
-                    <UserPlus className="w-5 h-5 text-brand-teal" />
-                    <span>Trusted Contacts</span>
-                </div>
-                <span className="bg-white/10 text-xs px-2 py-1 rounded-full">{trustedContacts.length} Added</span>
-            </Button>
-
-
             <h3 className="font-display text-lg font-bold text-white/80 mb-4 flex items-center gap-2">
                 <Shield className="w-5 h-5 text-brand-purple" />
                 Safety Analysis
@@ -123,6 +236,76 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                     </div>
                     <div className="text-sm text-white/50">{getRiskLabel(routeResult.safety_score).status}</div>
                 </div>
+            </div>
+
+            <div className={`bg-white/5 rounded-3xl p-5 border border-white/10 shadow-lg transition-all duration-500 ${isSeverityEscalated ? 'ring-2 ring-orange-400/40 shadow-orange-500/20' : ''}`}>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-white/60 uppercase tracking-wider flex items-center gap-2">
+                        <CloudSun className="w-4 h-4 text-brand-teal" />
+                        Weather Alerts
+                    </h3>
+                    <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${getWeatherSeverityStyles(highestSeverity)}`}>
+                        {weatherStatusLabel}
+                    </span>
+                </div>
+
+                {currentWeather ? (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                {(() => {
+                                    const ConditionIcon = getConditionIcon(currentWeather.condition || currentWeather.conditionLabel);
+                                    return <ConditionIcon className="h-4 w-4 text-white/80" />;
+                                })()}
+                                <div>
+                                <p className="text-sm font-semibold text-white">{currentWeather.conditionLabel}</p>
+                                <p className="text-xs text-white/60">{Math.round(currentWeather.temperatureC)}°C · {Math.round(currentWeather.rainfallMm)} mm rain · {Math.round(currentWeather.windSpeedKmh)} km/h wind</p>
+                                </div>
+                            </div>
+                            <Wind className="h-4 w-4 text-white/70" />
+                        </div>
+                        {weatherUpdatedAt && (
+                            <p className="mt-2 text-[11px] text-white/40">
+                                Updated {new Date(weatherUpdatedAt).toLocaleTimeString()}
+                                {relativeUpdatedAt ? ` (${relativeUpdatedAt})` : ''}
+                            </p>
+                        )}
+                        {isWeatherDataStale && (
+                            <p className="mt-1 text-[11px] text-amber-200">Data is older than 5 minutes. Refreshing on movement.</p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                        <p className="text-sm text-white/70">
+                            {!isTracking
+                                ? 'Weather monitoring starts when live tracking is active.'
+                                : weatherStatus === 'error' || weatherStatus === 'unavailable'
+                                    ? weatherReason === 'invalid_api_key'
+                                        ? 'Weather provider key is not active yet. Retrying automatically.'
+                                        : 'Weather service is temporarily unavailable.'
+                                    : 'Waiting for live weather updates...'}
+                        </p>
+                    </div>
+                )}
+
+                {hasWeatherAlerts && (
+                    <div className="mt-3 space-y-2">
+                        {weatherAlerts.slice(0, 3).map((alert, index) => (
+                            <div key={`${alert.type}-${index}`} className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 animate-fade-in-up" style={{ animationDelay: `${index * 80}ms` }}>
+                                <div className="flex items-start gap-2">
+                                    {(() => {
+                                        const AlertIcon = getWeatherAlertIcon(alert.type);
+                                        return <AlertIcon className="mt-0.5 h-4 w-4 text-amber-200" />;
+                                    })()}
+                                    <div>
+                                        <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">{alert.severity} · {alert.title}</p>
+                                        <p className="mt-1 text-sm text-amber-50/90">{alert.message}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Detailed Risk Report */}
@@ -251,6 +434,18 @@ const SafetyAnalysisReport: React.FC<SafetyAnalysisReportProps> = ({
                     <span>Open in Google Maps</span>
                 </div>
                 <span className="text-white/40 text-xs group-hover:text-white/80 transition-colors">Start Navigation &rarr;</span>
+            </Button>
+
+            {/* Trusted Contacts Button */}
+            <Button
+                onClick={() => setShowContactModal(true)}
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl h-12 flex items-center justify-between px-4"
+            >
+                <div className="flex items-center gap-2">
+                    <UserPlus className="w-5 h-5 text-brand-teal" />
+                    <span>Trusted Contacts</span>
+                </div>
+                <span className="bg-white/10 text-xs px-2 py-1 rounded-full">{trustedContacts.length} Added</span>
             </Button>
 
             {/* Safety Warning for Alternative Selection */}

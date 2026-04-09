@@ -45,6 +45,11 @@ function parseCorsOrigin(value) {
     return finalOrigins.length === 1 ? finalOrigins[0] : finalOrigins;
 }
 
+function parseNumber(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 export const config = {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: process.env.PORT || 8000,
@@ -61,6 +66,16 @@ export const config = {
     firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
     firebasePrivateKey: process.env.FIREBASE_PRIVATE_KEY,
     nirbhayaServiceUrl: process.env.NIRBHAYA_SERVICE_URL || 'http://localhost:8001',
+    weatherApiKey: process.env.WEATHER_API_KEY,
+    weatherProvider: process.env.WEATHER_PROVIDER || 'openweathermap',
+    weatherRequestTimeoutMs: parseNumber(process.env.WEATHER_REQUEST_TIMEOUT_MS, 8000),
+    weatherCacheTtlMs: parseNumber(process.env.WEATHER_CACHE_TTL_MS, 120000),
+    weatherAlertThresholds: {
+        windKmh: parseNumber(process.env.WEATHER_ALERT_WIND_KMH, 35),
+        heavyRainMmPerHour: parseNumber(process.env.WEATHER_ALERT_RAIN_MM_HOUR, 7),
+        extremeTempHighC: parseNumber(process.env.WEATHER_ALERT_EXTREME_TEMP_HIGH_C, 42),
+        extremeTempLowC: parseNumber(process.env.WEATHER_ALERT_EXTREME_TEMP_LOW_C, 5)
+    },
     rateLimit: {
         max: 100,
         timeWindow: '1 minute'

@@ -131,6 +131,36 @@ export interface IncidentDetail {
     answers: any;
 }
 
+export interface WeatherAlert {
+    type: string;
+    severity: 'none' | 'low' | 'moderate' | 'severe' | 'extreme' | string;
+    title: string;
+    message: string;
+}
+
+export interface WeatherSnapshot {
+    condition: string;
+    conditionLabel: string;
+    temperatureC: number;
+    windSpeedKmh: number;
+    rainfallMm: number;
+    provider: string;
+    observedAt: string;
+}
+
+export interface WeatherAlertsResponse {
+    status: string;
+    current: WeatherSnapshot | null;
+    alerts: WeatherAlert[];
+    highestSeverity: 'none' | 'low' | 'moderate' | 'severe' | 'extreme' | string;
+    updatedAt: string;
+    reason?: string;
+    providerStatus?: number | null;
+    providerMessage?: string;
+    triggerReason?: string;
+    routeAware?: boolean;
+}
+
 export const analyzeRouteSafety = async (origin: string, destination: string): Promise<RouteSafetyResponse> => {
     try {
         const response = await api.post('/safety', {
@@ -165,5 +195,40 @@ export const getIncidentDetails = async (ids: number[]): Promise<IncidentDetail[
     } catch (error) {
         console.error('Error fetching incident details:', error);
         throw formatApiError(error, 'Failed to fetch incident details');
+    }
+};
+
+export const getWeatherAlerts = async (
+    currentLat: number,
+    currentLng: number,
+    routePolyline?: string
+): Promise<WeatherAlertsResponse> => {
+    try {
+        const response = await api.post('/weather-alerts', {
+            currentLat,
+            currentLng,
+            routePolyline,
+        });
+
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching weather alerts:', error);
+        throw formatApiError(error, 'Failed to fetch weather alerts');
+    }
+};
+
+export const getWeatherSnapshot = async (
+    lat: number,
+    lng: number
+): Promise<WeatherAlertsResponse> => {
+    try {
+        const response = await api.get('/weather', {
+            params: { lat, lng }
+        });
+
+        return response.data;
+    } catch (error) {
+        console.error('Error fetching weather snapshot:', error);
+        throw formatApiError(error, 'Failed to fetch weather snapshot');
     }
 };

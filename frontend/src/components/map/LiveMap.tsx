@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { GoogleMap, DirectionsRenderer, Polyline, Marker, InfoWindow } from '@react-google-maps/api';
-import { MapPin, Navigation, Minimize2, Maximize2 } from 'lucide-react';
+import { MapPin, Navigation, Minimize2, Maximize2, CloudSun } from 'lucide-react';
+import { WeatherAlert, WeatherSnapshot } from '@/services/navigation';
 
 interface LiveMapProps {
     isLoaded: boolean;
@@ -28,6 +29,10 @@ interface LiveMapProps {
         distanceMeters: number;
         location: google.maps.LatLngLiteral;
     } | null;
+    currentWeather: WeatherSnapshot | null;
+    weatherAlerts: WeatherAlert[];
+    weatherStatus: string;
+    weatherReason: string | null;
     userBearing?: number;
     isFullScreen: boolean;
     setIsFullScreen: (isFull: boolean) => void;
@@ -55,6 +60,10 @@ const LiveMap: React.FC<LiveMapProps> = ({
     userLiveLocation,
     nearestHospital,
     nearestPoliceStation,
+    currentWeather,
+    weatherAlerts,
+    weatherStatus,
+    weatherReason,
     userBearing,
     isFullScreen,
     setIsFullScreen
@@ -207,6 +216,29 @@ const LiveMap: React.FC<LiveMapProps> = ({
                             Police: {nearestPoliceStation.name} ({Math.round(nearestPoliceStation.distanceMeters)}m)
                         </p>
                     )}
+                </div>
+            )}
+
+            {isTracking && (
+                <div className="absolute top-28 left-4 z-10 bg-black/70 backdrop-blur px-3 py-2 rounded-xl border border-white/10 space-y-1 max-w-[220px]">
+                    <div className="flex items-center gap-2">
+                        <CloudSun className="w-4 h-4 text-brand-teal" />
+                        <span className="text-[11px] font-semibold text-white uppercase tracking-wide">Weather</span>
+                    </div>
+                    <p className="text-[11px] text-white/90 truncate">
+                        {currentWeather
+                            ? `${currentWeather.conditionLabel} · ${Math.round(currentWeather.temperatureC)}°C`
+                            : weatherStatus === 'unavailable'
+                                ? 'Unavailable'
+                                : 'Checking conditions...'}
+                    </p>
+                    <p className="text-[10px] text-white/70 truncate">
+                        {weatherAlerts.length > 0
+                            ? `${weatherAlerts.length} active alert${weatherAlerts.length > 1 ? 's' : ''}`
+                            : weatherReason === 'invalid_api_key'
+                                ? 'Provider key pending activation'
+                                : 'No active alerts'}
+                    </p>
                 </div>
             )}
 

@@ -1,6 +1,7 @@
 import { mapsService } from '../../services/mapsService.js';
 import { geminiService } from '../../services/geminiService.js';
 import { safetyAssistant } from '../../services/safetyAssistant.js';
+import { weatherService } from '../../services/weatherService.js';
 import { safetyRouteController } from '../../controllers/safetyRouteController.js';
 import { incidentDetailsController } from '../../controllers/incidentDetailsController.js';
 import { config } from '../../config/env.js';
@@ -279,6 +280,135 @@ export default async function (fastify, opts) {
             return reply.code(500).send({
                 error: 'Tracking failed',
                 message: error.message
+            });
+        }
+    });
+
+    // GET /weather - Current weather snapshot for coordinates
+    fastify.get('/weather', {
+        schema: {
+            querystring: {
+                type: 'object',
+                required: ['lat', 'lng'],
+                properties: {
+                    lat: { type: 'number', minimum: -90, maximum: 90 },
+                    lng: { type: 'number', minimum: -180, maximum: 180 }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        status: { type: 'string' },
+                        current: {
+                            anyOf: [
+                                { type: 'null' },
+                                {
+                                    type: 'object',
+                                    properties: {
+                                        condition: { type: 'string' },
+                                        conditionLabel: { type: 'string' },
+                                        temperatureC: { type: 'number' },
+                                        windSpeedKmh: { type: 'number' },
+                                        rainfallMm: { type: 'number' },
+                                        provider: { type: 'string' },
+                                        observedAt: { type: 'string' }
+                                    }
+                                }
+                            ]
+                        },
+                        alerts: { type: 'array' },
+                        highestSeverity: { type: 'string' },
+                        updatedAt: { type: 'string' },
+                        reason: { type: 'string' },
+                        providerStatus: { type: 'number' },
+                        providerMessage: { type: 'string' }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { lat, lng } = request.query;
+
+        try {
+            return await weatherService.getWeatherSnapshot(lat, lng);
+        } catch (error) {
+            console.error('Weather snapshot failed:', error);
+            return reply.code(502).send({
+                status: 'error',
+                message: 'Weather provider unavailable',
+                error: error.message
+            });
+        }
+    });
+
+    // POST /weather-alerts - Weather conditions and alerts for current travel location
+    fastify.post('/weather-alerts', {
+        schema: {
+            body: {
+                type: 'object',
+                required: ['currentLat', 'currentLng'],
+                properties: {
+                    currentLat: { type: 'number', minimum: -90, maximum: 90 },
+                    currentLng: { type: 'number', minimum: -180, maximum: 180 },
+                    routePolyline: { type: 'string' }
+                }
+            },
+            response: {
+                200: {
+                    type: 'object',
+                    properties: {
+                        status: { type: 'string' },
+                        current: {
+                            anyOf: [
+                                {
+                                    type: 'null'
+                                },
+                                {
+                                    type: 'object',
+                                    properties: {
+                                        condition: { type: 'string' },
+                                        conditionLabel: { type: 'string' },
+                                        temperatureC: { type: 'number' },
+                                        windSpeedKmh: { type: 'number' },
+                                        rainfallMm: { type: 'number' },
+                                        provider: { type: 'string' },
+                                        observedAt: { type: 'string' }
+                                    }
+                                }
+                            ]
+                        },
+                        alerts: { type: 'array' },
+                        highestSeverity: { type: 'string' },
+                        updatedAt: { type: 'string' },
+                        reason: { type: 'string' },
+                        providerStatus: { type: 'number' },
+                        providerMessage: { type: 'string' },
+                        triggerReason: { type: 'string' },
+                        routeAware: { type: 'boolean' }
+                    }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
+    }, async (request, reply) => {
+        const { currentLat, currentLng } = request.body;
+
+        try {
+            const snapshot = await weatherService.getWeatherSnapshot(currentLat, currentLng);
+
+            return {
+                ...snapshot,
+                triggerReason: 'movement_or_severity_change',
+                routeAware: false
+            };
+        } catch (error) {
+            console.error('Weather alerts failed:', error);
+            return reply.code(502).send({
+                status: 'error',
+                message: 'Weather provider unavailable',
+                error: error.message
             });
         }
     });
