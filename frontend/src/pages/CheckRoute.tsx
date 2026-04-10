@@ -49,6 +49,12 @@ interface MeResponse {
   };
 }
 
+interface NotifyResult {
+  total: number;
+  opened: number;
+  blocked: number;
+}
+
 const CheckRoute = () => {
   type TrustedContact = { name: string; phone: string };
 
@@ -389,16 +395,79 @@ const CheckRoute = () => {
     }
   };
 
+  const getLiveLocationLink = async () => {
+    if (!navigator.geolocation) {
+      return window.location.href;
+    }
+
+    return new Promise<string>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve(`https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`);
+        },
+        () => resolve(window.location.href),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    });
+  };
+
   // Helper to notify trusted contacts
-  const notifyTrustedContacts = (message: string) => {
-    if (trustedContacts.length === 0) return;
+  const notifyTrustedContacts = (message: string): NotifyResult => {
+    if (trustedContacts.length === 0) {
+      return { total: 0, opened: 0, blocked: 0 };
+    }
+
+    let opened = 0;
+    let blocked = 0;
 
     trustedContacts.forEach(contact => {
-      // Create WhatsApp link
-      const phone = contact.phone.replace(/\D/g, ''); // Clean number
+      const phone = contact.phone.replace(/\D/g, '');
       const encodedMsg = encodeURIComponent(`Hi ${contact.name}, ${message}`);
-      // Open WhatsApp in new tab (in real app, this would be an SMS API)
-      window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank');
+      const popup = window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank', 'noopener,noreferrer');
+
+      if (popup) {
+        opened += 1;
+      } else {
+        blocked += 1;
+      }
+    });
+
+    return {
+      total: trustedContacts.length,
+      opened,
+      blocked
+    };
+  };
+
+  const triggerTrustedContactsForSos = async (source: 'hardware' | 'manual') => {
+    if (trustedContacts.length === 0) {
+      setNeedsManualContactNotify(true);
+      toast({
+        title: 'No trusted contacts',
+        description: 'Add trusted contacts first to send WhatsApp alerts.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    const locationLink = await getLiveLocationLink();
+    const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
+    const notifyResult = notifyTrustedContacts(sosMsg);
+
+    if (notifyResult.blocked > 0) {
+      setNeedsManualContactNotify(true);
+      toast({
+        title: 'Popup blocked by browser',
+        description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setNeedsManualContactNotify(false);
+    toast({
+      title: source === 'hardware' ? 'Hardware SOS alerts sent' : 'Emergency alert sent',
+      description: `WhatsApp opened for ${notifyResult.opened} trusted contact${notifyResult.opened === 1 ? '' : 's'}.`
     });
   };
 
@@ -474,6 +543,8 @@ const CheckRoute = () => {
   const [sosActive, setSosActive] = useState(false);
   const [isSosSending, setIsSosSending] = useState(false);
   const [hardwareSosEvent, setHardwareSosEvent] = useState<LastSosEvent | null>(null);
+  const [needsManualContactNotify, setNeedsManualContactNotify] = useState(false);
+  const [isManualContactNotifyLoading, setIsManualContactNotifyLoading] = useState(false);
   const lastSeenSosTimestampRef = useRef<string | null>(null);
   const hasInitializedSosPollingRef = useRef(false);
 
@@ -528,14 +599,17 @@ const CheckRoute = () => {
 
         setSosActive(true);
         if (!isTracking && routeResult?.overview_polyline) {
-          startTracking('sos', { notifyContacts: true });
+          // Keep tracking/contact notifications separate from hardware SOS fan-out.
+          startTracking('sos', { notifyContacts: false });
         }
+
+        void triggerTrustedContactsForSos('hardware');
 
         const isHardwareSource = String(lastSosEvent.source || '').toLowerCase() === 'hardware';
         toast({
           title: isHardwareSource ? 'Hardware SOS triggered' : 'SOS triggered',
           description: isHardwareSource
-            ? 'Your ESP32 alert was received. Emergency workflow is now active.'
+            ? 'Your ESP32 alert was received. Sending WhatsApp alerts now.'
             : 'Emergency workflow is now active.',
           variant: 'destructive'
         });
@@ -553,7 +627,7 @@ const CheckRoute = () => {
       isCancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [isAuthenticated, isTracking, routeResult, startTracking]);
+  }, [isAuthenticated, isTracking, routeResult, startTracking, trustedContacts, fromLocation, toLocation]);
 
   // Smart Safety Mode
   const [smartSafetyEnabled, setSmartSafetyEnabled] = useState(false);
@@ -615,7 +689,18 @@ const CheckRoute = () => {
           });
           // 1. Notify Trusted Contacts (WhatsApp)
           const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-          notifyTrustedContacts(sosMsg);
+          const notifyResult = notifyTrustedContacts(sosMsg);
+
+          if (notifyResult.blocked > 0) {
+            setNeedsManualContactNotify(true);
+            toast({
+              title: 'Popup blocked by browser',
+              description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
+              variant: 'destructive'
+            });
+          } else {
+            setNeedsManualContactNotify(false);
+          }
 
           // 2. Share via Web Share API (native sheet)
           if (navigator.share) {
@@ -658,6 +743,24 @@ const CheckRoute = () => {
         variant: 'destructive'
       });
       setIsSosSending(false);
+    }
+  };
+
+  const handleManualTrustedContactNotify = async () => {
+    if (trustedContacts.length === 0) {
+      toast({
+        title: 'No trusted contacts',
+        description: 'Add trusted contacts first to send WhatsApp alerts.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    setIsManualContactNotifyLoading(true);
+    try {
+      await triggerTrustedContactsForSos('hardware');
+    } finally {
+      setIsManualContactNotifyLoading(false);
     }
   };
 
@@ -737,6 +840,17 @@ const CheckRoute = () => {
                         ? 'Hardware SOS from ESP32 detected. Trusted-contact and live safety flow are now active.'
                         : 'SOS is active. Continue to monitor live location and emergency support options.'}
                     </p>
+                    {needsManualContactNotify && (
+                      <div className="mt-3">
+                        <Button
+                          onClick={handleManualTrustedContactNotify}
+                          disabled={isManualContactNotifyLoading}
+                          className="bg-red-500 hover:bg-red-600 text-white"
+                        >
+                          {isManualContactNotifyLoading ? 'Opening WhatsApp...' : 'Notify Trusted Contacts'}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <span className="rounded-full border border-red-300/40 bg-red-500/20 px-3 py-1 text-xs font-bold text-red-100">
                     ACTIVE
