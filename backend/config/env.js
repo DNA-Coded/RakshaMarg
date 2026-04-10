@@ -56,6 +56,7 @@ export const config = {
     corsOrigin: parseCorsOrigin(process.env.CORS_ORIGIN),
     apiKeyHeader: 'x-api-key',
     appApiKey: process.env.APP_API_KEY,
+    deviceKey: process.env.DEVICE_KEY,
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY,
     geminiApiKey: process.env.GEMINI_API_KEY,
     mongodbUri: process.env.MONGODB_URI,

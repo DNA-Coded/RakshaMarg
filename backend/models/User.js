@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema(
             default: null,
             trim: true
         },
+        deviceId: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true
+        },
         role: {
             type: String,
             default: 'user',

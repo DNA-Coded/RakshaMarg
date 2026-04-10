@@ -8,6 +8,7 @@ import { config } from './config/env.js';
 // Import Routes
 import navigationRoutes from './routes/navigation/index.js';
 import userRoutes from './routes/users/index.js';
+import hardwareRoutes from './routes/hardware/index.js';
 
 export async function buildApp() {
     const app = Fastify({
@@ -32,7 +33,7 @@ export async function buildApp() {
     await app.register(cors, {
         origin: config.corsOrigin,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
+        allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-device-key']
     });
 
     // Custom Plugins
@@ -52,6 +53,7 @@ export async function buildApp() {
     // API Routes
     await app.register(navigationRoutes, { prefix: '/api/v1/navigation' });
     await app.register(userRoutes, { prefix: '/api/v1/users' });
+    await app.register(hardwareRoutes, { prefix: '/api/sos' });
 
     app.addHook('onClose', async () => {
         await disconnectMongoDB();

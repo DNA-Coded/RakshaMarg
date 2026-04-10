@@ -5,6 +5,8 @@ import { weatherService } from '../../services/weatherService.js';
 import { safetyRouteController } from '../../controllers/safetyRouteController.js';
 import { incidentDetailsController } from '../../controllers/incidentDetailsController.js';
 import { config } from '../../config/env.js';
+import { User } from '../../models/User.js';
+import { triggerSOS } from '../../services/sosService.js';
 // import { firebaseService } from '../../services/firebase.js';
 
 
@@ -215,10 +217,55 @@ export default async function (fastify, opts) {
 
     // POST /sos - Trigger SOS
     fastify.post('/sos', {
-        onRequest: [fastify.verifyApiKey] // And maybe verifyFirebaseToken
+        schema: {
+            body: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                    userId: { type: 'string', minLength: 1 },
+                    deviceId: { type: 'string', minLength: 1, maxLength: 100 },
+                    metadata: { type: 'object' }
+                }
+            }
+        },
+        onRequest: [fastify.verifyApiKey]
     }, async (request, reply) => {
-        // Logic to handle SOS
-        return { status: 'SOS Triggered' };
+        const { userId, deviceId, metadata = {} } = request.body || {};
+
+        let targetUserId = userId;
+
+        if (!targetUserId && deviceId) {
+            const user = await User.findOne({ deviceId }).select('_id');
+
+            if (!user) {
+                return reply.code(404).send({
+                    error: 'User not found',
+                    message: 'No user mapped to the provided deviceId'
+                });
+            }
+
+            targetUserId = user._id;
+        }
+
+        // Keep endpoint backwards-compatible for callers that do not yet send user context.
+        if (!targetUserId) {
+            return {
+                status: 'SOS Triggered',
+                accepted: true,
+                warning: 'No userId or deviceId provided. Shared SOS logic was not executed.'
+            };
+        }
+
+        const result = await triggerSOS(targetUserId, {
+            source: metadata.source || 'app',
+            deviceId,
+            ...metadata
+        });
+
+        return {
+            status: 'SOS Triggered',
+            result
+        };
     });
 
     // POST /track - Live navigation tracking
