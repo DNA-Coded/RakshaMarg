@@ -62,6 +62,29 @@ const userSchema = new mongoose.Schema(
         lastLoginAt: {
             type: Date,
             default: Date.now
+        },
+        lastSosEvent: {
+            type: {
+                source: {
+                    type: String,
+                    default: 'unknown',
+                    trim: true
+                },
+                deviceId: {
+                    type: String,
+                    default: null,
+                    trim: true
+                },
+                triggeredAt: {
+                    type: Date,
+                    default: null
+                },
+                acknowledgedAt: {
+                    type: Date,
+                    default: null
+                }
+            },
+            default: null
         }
     },
     {

@@ -9,7 +9,9 @@ function toUserResponse(user) {
         photoURL: user.photoURL,
         phoneNumber: user.phoneNumber,
         role: user.role,
+        deviceId: user.deviceId || null,
         trustedContacts: user.trustedContacts || [],
+        lastSosEvent: user.lastSosEvent || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         lastLoginAt: user.lastLoginAt

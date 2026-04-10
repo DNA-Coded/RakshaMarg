@@ -34,6 +34,21 @@ const safetyTips = [
   "Note landmarks along your route for easier navigation.",
 ];
 
+const SOS_STATUS_POLL_INTERVAL_MS = 5000;
+
+interface LastSosEvent {
+  source?: string;
+  deviceId?: string | null;
+  triggeredAt?: string;
+  acknowledgedAt?: string | null;
+}
+
+interface MeResponse {
+  user?: {
+    lastSosEvent?: LastSosEvent | null;
+  };
+}
+
 const CheckRoute = () => {
   type TrustedContact = { name: string; phone: string };
 
@@ -458,6 +473,87 @@ const CheckRoute = () => {
 
   const [sosActive, setSosActive] = useState(false);
   const [isSosSending, setIsSosSending] = useState(false);
+  const [hardwareSosEvent, setHardwareSosEvent] = useState<LastSosEvent | null>(null);
+  const lastSeenSosTimestampRef = useRef<string | null>(null);
+  const hasInitializedSosPollingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setHardwareSosEvent(null);
+      lastSeenSosTimestampRef.current = null;
+      hasInitializedSosPollingRef.current = false;
+      return;
+    }
+
+    let isCancelled = false;
+
+    const pollSosStatus = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+          method: 'GET',
+          headers: await getAuthHeaders()
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json() as MeResponse;
+        const lastSosEvent = data?.user?.lastSosEvent || null;
+
+        if (isCancelled) return;
+        if (!lastSosEvent?.triggeredAt) {
+          hasInitializedSosPollingRef.current = true;
+          return;
+        }
+
+        setHardwareSosEvent(lastSosEvent);
+
+        const previousTimestamp = lastSeenSosTimestampRef.current;
+        const nextTimestamp = lastSosEvent.triggeredAt;
+        const previousMs = previousTimestamp ? Date.parse(previousTimestamp) : Number.NaN;
+        const nextMs = Date.parse(nextTimestamp);
+
+        const isNewSosEvent = !previousTimestamp ||
+          (Number.isFinite(nextMs) && (!Number.isFinite(previousMs) || nextMs > previousMs));
+
+        lastSeenSosTimestampRef.current = nextTimestamp;
+
+        if (!hasInitializedSosPollingRef.current) {
+          hasInitializedSosPollingRef.current = true;
+          return;
+        }
+
+        if (!isNewSosEvent) {
+          return;
+        }
+
+        setSosActive(true);
+        if (!isTracking && routeResult?.overview_polyline) {
+          startTracking('sos', { notifyContacts: true });
+        }
+
+        const isHardwareSource = String(lastSosEvent.source || '').toLowerCase() === 'hardware';
+        toast({
+          title: isHardwareSource ? 'Hardware SOS triggered' : 'SOS triggered',
+          description: isHardwareSource
+            ? 'Your ESP32 alert was received. Emergency workflow is now active.'
+            : 'Emergency workflow is now active.',
+          variant: 'destructive'
+        });
+      } catch (error) {
+        console.error('SOS status polling failed:', error);
+      }
+    };
+
+    void pollSosStatus();
+    const intervalId = window.setInterval(() => {
+      void pollSosStatus();
+    }, SOS_STATUS_POLL_INTERVAL_MS);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isAuthenticated, isTracking, routeResult, startTracking]);
 
   // Smart Safety Mode
   const [smartSafetyEnabled, setSmartSafetyEnabled] = useState(false);
@@ -629,6 +725,26 @@ const CheckRoute = () => {
               </motion.p>
             </div>
           </section>
+
+          {sosActive && (
+            <section className="container px-4 mb-8">
+              <div className="max-w-4xl mx-auto rounded-2xl border border-red-400/40 bg-red-500/15 px-5 py-4 backdrop-blur-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold uppercase tracking-wider text-red-100">Emergency Workflow Active</p>
+                    <p className="mt-1 text-sm text-red-100/90">
+                      {String(hardwareSosEvent?.source || '').toLowerCase() === 'hardware'
+                        ? 'Hardware SOS from ESP32 detected. Trusted-contact and live safety flow are now active.'
+                        : 'SOS is active. Continue to monitor live location and emergency support options.'}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-red-300/40 bg-red-500/20 px-3 py-1 text-xs font-bold text-red-100">
+                    ACTIVE
+                  </span>
+                </div>
+              </div>
+            </section>
+          )}
 
           {/* New Input Section (Timeline without Time) */}
           <section className="container px-4 mb-16 relative z-10">
