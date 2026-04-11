@@ -412,7 +412,10 @@ const CheckRoute = () => {
   };
 
   // Helper to notify trusted contacts
-  const notifyTrustedContacts = (message: string): NotifyResult => {
+  const notifyTrustedContacts = (
+    message: string,
+    preparedPopups?: Array<{ contact: TrustedContact; phone: string; popup: Window | null }>
+  ): NotifyResult => {
     if (trustedContacts.length === 0) {
       return { total: 0, opened: 0, blocked: 0 };
     }
@@ -420,12 +423,36 @@ const CheckRoute = () => {
     let opened = 0;
     let blocked = 0;
 
-    trustedContacts.forEach(contact => {
-      const phone = contact.phone.replace(/\D/g, '');
+    const targets = preparedPopups ?? trustedContacts.map((contact) => ({
+      contact,
+      phone: contact.phone.replace(/\D/g, ''),
+      popup: null as Window | null
+    }));
+
+    targets.forEach(({ contact, phone, popup }) => {
+      if (!phone) {
+        blocked += 1;
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+        return;
+      }
+
       const encodedMsg = encodeURIComponent(`Hi ${contact.name}, ${message}`);
-      const popup = window.open(`https://wa.me/${phone}?text=${encodedMsg}`, '_blank', 'noopener,noreferrer');
+      const whatsappUrl = `https://wa.me/${phone}?text=${encodedMsg}`;
 
       if (popup) {
+        try {
+          popup.location.href = whatsappUrl;
+          opened += 1;
+        } catch {
+          blocked += 1;
+        }
+        return;
+      }
+
+      const openedPopup = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+      if (openedPopup) {
         opened += 1;
       } else {
         blocked += 1;
@@ -672,6 +699,13 @@ const CheckRoute = () => {
   const handleSOS = async () => {
     if (sosActive || isSosSending) return;
 
+    // Open popups immediately on user click so browsers don't block them after async SOS work.
+    const preparedPopups = trustedContacts.map((contact) => ({
+      contact,
+      phone: contact.phone.replace(/\D/g, ''),
+      popup: window.open('', '_blank', 'noopener,noreferrer')
+    }));
+
     setIsSosSending(true);
 
     // Get current location
@@ -689,7 +723,7 @@ const CheckRoute = () => {
           });
           // 1. Notify Trusted Contacts (WhatsApp)
           const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-          const notifyResult = notifyTrustedContacts(sosMsg);
+          const notifyResult = notifyTrustedContacts(sosMsg, preparedPopups);
 
           if (notifyResult.blocked > 0) {
             setNeedsManualContactNotify(true);
@@ -718,6 +752,11 @@ const CheckRoute = () => {
           // SOS is considered active after message/location dispatch completes.
           setSosActive(true);
         } catch (e) {
+          preparedPopups.forEach(({ popup }) => {
+            if (popup && !popup.closed) {
+              popup.close();
+            }
+          });
           console.error(e);
           toast({
             title: 'SOS failed',
@@ -728,6 +767,11 @@ const CheckRoute = () => {
           setIsSosSending(false);
         }
       }, (error) => {
+        preparedPopups.forEach(({ popup }) => {
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+        });
         console.error("SOS location error:", error);
         toast({
           title: 'SOS location failed',
@@ -737,6 +781,11 @@ const CheckRoute = () => {
         setIsSosSending(false);
       }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
     } else {
+      preparedPopups.forEach(({ popup }) => {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+      });
       toast({
         title: 'SOS unavailable',
         description: 'Geolocation is not supported in this browser.',
