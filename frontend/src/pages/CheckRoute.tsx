@@ -466,7 +466,7 @@ const CheckRoute = () => {
     };
   };
 
-  const triggerTrustedContactsForSos = async (source: 'hardware' | 'manual') => {
+  const triggerTrustedContactsForSos = async (source: 'hardware' | 'manual', preparedPopups?: Array<{ contact: TrustedContact; phone: string; popup: Window | null }>) => {
     if (trustedContacts.length === 0) {
       setNeedsManualContactNotify(true);
       toast({
@@ -479,15 +479,26 @@ const CheckRoute = () => {
 
     const locationLink = await getLiveLocationLink();
     const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-    const notifyResult = notifyTrustedContacts(sosMsg);
+    
+    // For hardware SOS without user gesture, we can't reliably open popups (browser security).
+    // Only use pre-opened windows if provided (manual SOS flow with user gesture).
+    const notifyResult = notifyTrustedContacts(sosMsg, preparedPopups);
 
-    if (notifyResult.blocked > 0) {
+    if (notifyResult.blocked > 0 || (preparedPopups && preparedPopups.length > 0 && notifyResult.opened === 0)) {
       setNeedsManualContactNotify(true);
-      toast({
-        title: 'Popup blocked by browser',
-        description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
-        variant: 'destructive'
-      });
+      if (source === 'hardware') {
+        toast({
+          title: 'Hardware SOS detected',
+          description: 'WhatsApp popups require manual action. Tap "Notify Trusted Contacts" button.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: 'Popup blocked by browser',
+          description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
+          variant: 'destructive'
+        });
+      }
       return;
     }
 
@@ -624,22 +635,34 @@ const CheckRoute = () => {
           return;
         }
 
+        console.log('[DEBUG] New hardware SOS event detected:', { previousTimestamp, nextTimestamp, isNewSosEvent });
+        
         setSosActive(true);
         if (!isTracking && routeResult?.overview_polyline) {
           // Keep tracking/contact notifications separate from hardware SOS fan-out.
           startTracking('sos', { notifyContacts: false });
         }
 
-        void triggerTrustedContactsForSos('hardware');
-
+        // Hardware SOS: no user gesture so browsers block popups. Defer to manual notify button.
+        // Just trigger the SOS state/toast, let user tap the notify button if needed.
         const isHardwareSource = String(lastSosEvent.source || '').toLowerCase() === 'hardware';
-        toast({
-          title: isHardwareSource ? 'Hardware SOS triggered' : 'SOS triggered',
-          description: isHardwareSource
-            ? 'Your ESP32 alert was received. Sending WhatsApp alerts now.'
-            : 'Emergency workflow is now active.',
-          variant: 'destructive'
-        });
+        
+        if (isHardwareSource) {
+          // For hardware SOS, just show the active state; user can tap notify button if needed
+          setNeedsManualContactNotify(true);
+          toast({
+            title: 'Hardware SOS triggered',
+            description: 'Your ESP32 alert was received. Tap "Notify Trusted Contacts" to send WhatsApp alerts.',
+            variant: 'destructive'
+          });
+        } else {
+          // Manual SOS already handled by handleSOS
+          toast({
+            title: 'SOS triggered',
+            description: 'Emergency workflow is now active.',
+            variant: 'destructive'
+          });
+        }
       } catch (error) {
         console.error('SOS status polling failed:', error);
       }
@@ -805,9 +828,23 @@ const CheckRoute = () => {
       return;
     }
 
+    // Pre-open WhatsApp windows on user click (has gesture, browsers allow)
+    const preparedPopups = trustedContacts.map((contact) => ({
+      contact,
+      phone: contact.phone.replace(/\D/g, ''),
+      popup: window.open('', '_blank', 'noopener,noreferrer')
+    }));
+
     setIsManualContactNotifyLoading(true);
     try {
-      await triggerTrustedContactsForSos('hardware');
+      await triggerTrustedContactsForSos('manual', preparedPopups);
+    } catch (error) {
+      console.error('Failed to notify trusted contacts:', error);
+      preparedPopups.forEach(({ popup }) => {
+        if (popup && !popup.closed) {
+          popup.close();
+        }
+      });
     } finally {
       setIsManualContactNotifyLoading(false);
     }
