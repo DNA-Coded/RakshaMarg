@@ -45,6 +45,7 @@ interface LastSosEvent {
 
 interface MeResponse {
   user?: {
+    id?: string;
     lastSosEvent?: LastSosEvent | null;
   };
 }
@@ -411,101 +412,13 @@ const CheckRoute = () => {
     });
   };
 
-  // Helper to notify trusted contacts
-  const notifyTrustedContacts = (
-    message: string,
-    preparedPopups?: Array<{ contact: TrustedContact; phone: string; popup: Window | null }>
-  ): NotifyResult => {
-    if (trustedContacts.length === 0) {
-      return { total: 0, opened: 0, blocked: 0 };
-    }
+  const notifyTrustedContacts = () => ({ total: trustedContacts.length, opened: 0, blocked: 0 });
 
-    let opened = 0;
-    let blocked = 0;
-
-    const targets = preparedPopups ?? trustedContacts.map((contact) => ({
-      contact,
-      phone: contact.phone.replace(/\D/g, ''),
-      popup: null as Window | null
-    }));
-
-    targets.forEach(({ contact, phone, popup }) => {
-      if (!phone) {
-        blocked += 1;
-        if (popup && !popup.closed) {
-          popup.close();
-        }
-        return;
-      }
-
-      const encodedMsg = encodeURIComponent(`Hi ${contact.name}, ${message}`);
-      const whatsappUrl = `https://wa.me/${phone}?text=${encodedMsg}`;
-
-      if (popup) {
-        try {
-          popup.location.href = whatsappUrl;
-          opened += 1;
-        } catch {
-          blocked += 1;
-        }
-        return;
-      }
-
-      const openedPopup = window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
-      if (openedPopup) {
-        opened += 1;
-      } else {
-        blocked += 1;
-      }
-    });
-
-    return {
-      total: trustedContacts.length,
-      opened,
-      blocked
-    };
-  };
-
-  const triggerTrustedContactsForSos = async (source: 'hardware' | 'manual', preparedPopups?: Array<{ contact: TrustedContact; phone: string; popup: Window | null }>) => {
-    if (trustedContacts.length === 0) {
-      setNeedsManualContactNotify(true);
-      toast({
-        title: 'No trusted contacts',
-        description: 'Add trusted contacts first to send WhatsApp alerts.',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    const locationLink = await getLiveLocationLink();
-    const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-    
-    // For hardware SOS without user gesture, we can't reliably open popups (browser security).
-    // Only use pre-opened windows if provided (manual SOS flow with user gesture).
-    const notifyResult = notifyTrustedContacts(sosMsg, preparedPopups);
-
-    if (notifyResult.blocked > 0 || (preparedPopups && preparedPopups.length > 0 && notifyResult.opened === 0)) {
-      setNeedsManualContactNotify(true);
-      if (source === 'hardware') {
-        toast({
-          title: 'Hardware SOS detected',
-          description: 'WhatsApp popups require manual action. Tap "Notify Trusted Contacts" button.',
-          variant: 'destructive'
-        });
-      } else {
-        toast({
-          title: 'Popup blocked by browser',
-          description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
-          variant: 'destructive'
-        });
-      }
-      return;
-    }
-
+  const triggerTrustedContactsForSos = async () => {
     setNeedsManualContactNotify(false);
     toast({
-      title: source === 'hardware' ? 'Hardware SOS alerts sent' : 'Emergency alert sent',
-      description: `WhatsApp opened for ${notifyResult.opened} trusted contact${notifyResult.opened === 1 ? '' : 's'}.`
+      title: 'SOS active',
+      description: 'Trusted contacts are notified through backend SMS now.'
     });
   };
 
@@ -648,11 +561,10 @@ const CheckRoute = () => {
         const isHardwareSource = String(lastSosEvent.source || '').toLowerCase() === 'hardware';
         
         if (isHardwareSource) {
-          // For hardware SOS, just show the active state; user can tap notify button if needed
-          setNeedsManualContactNotify(true);
+          setNeedsManualContactNotify(false);
           toast({
             title: 'Hardware SOS triggered',
-            description: 'Your ESP32 alert was received. Tap "Notify Trusted Contacts" to send WhatsApp alerts.',
+            description: 'Your ESP32 alert was received. The backend is handling SMS notifications.',
             variant: 'destructive'
           });
         } else {
@@ -722,129 +634,96 @@ const CheckRoute = () => {
   const handleSOS = async () => {
     if (sosActive || isSosSending) return;
 
-    // Open popups immediately on user click so browsers don't block them after async SOS work.
-    const preparedPopups = trustedContacts.map((contact) => ({
-      contact,
-      phone: contact.phone.replace(/\D/g, ''),
-      popup: window.open('', '_blank', 'noopener,noreferrer')
-    }));
-
     setIsSosSending(true);
 
-    // Get current location
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(async (position) => {
-        try {
-          const { latitude, longitude } = position.coords;
-          const locationLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
-
-          // Notify backend
-          await fetch(buildNavigationApiUrl('/sos'), {
-            method: 'POST',
-            headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ lat: latitude, lng: longitude, timestamp: new Date().toISOString(), route: routeResult?.summary })
-          });
-          // 1. Notify Trusted Contacts (WhatsApp)
-          const sosMsg = `🚨 *EMERGENCY SOS* 🚨\nI need help!\nMy Location: ${locationLink}\nRoute: ${fromLocation} to ${toLocation}`;
-          const notifyResult = notifyTrustedContacts(sosMsg, preparedPopups);
-
-          if (notifyResult.blocked > 0) {
-            setNeedsManualContactNotify(true);
-            toast({
-              title: 'Popup blocked by browser',
-              description: 'Allow popups for this site, then tap Notify Trusted Contacts again.',
-              variant: 'destructive'
-            });
-          } else {
-            setNeedsManualContactNotify(false);
-          }
-
-          // 2. Share via Web Share API (native sheet)
-          if (navigator.share) {
-            try {
-              await navigator.share({ title: '🚨 EMERGENCY', text: sosMsg, url: locationLink });
-            } catch (e) { console.log(e); }
-          } else {
-            toast({
-              title: 'Emergency alert sent',
-              description: `Alert sent to ${trustedContacts.length} contacts. Calling police helpline...`
-            });
-            window.location.href = 'tel:100';
-          }
-
-          // SOS is considered active after message/location dispatch completes.
-          setSosActive(true);
-        } catch (e) {
-          preparedPopups.forEach(({ popup }) => {
-            if (popup && !popup.closed) {
-              popup.close();
-            }
-          });
-          console.error(e);
-          toast({
-            title: 'SOS failed',
-            description: 'Unable to send emergency alert right now. Please try again.',
-            variant: 'destructive'
-          });
-        } finally {
-          setIsSosSending(false);
-        }
-      }, (error) => {
-        preparedPopups.forEach(({ popup }) => {
-          if (popup && !popup.closed) {
-            popup.close();
-          }
-        });
-        console.error("SOS location error:", error);
-        toast({
-          title: 'SOS location failed',
-          description: 'Unable to fetch your location for SOS. Turn on GPS and retry.',
-          variant: 'destructive'
-        });
-        setIsSosSending(false);
-      }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
-    } else {
-      preparedPopups.forEach(({ popup }) => {
-        if (popup && !popup.closed) {
-          popup.close();
-        }
+    try {
+      const profileResponse = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+        method: 'GET',
+        headers: await getAuthHeaders()
       });
+
+      if (!profileResponse.ok) {
+        throw new Error(`Failed to load profile (${profileResponse.status})`);
+      }
+
+      const profileData = await profileResponse.json();
+      const userId = profileData?.user?.id || profileData?.user?._id;
+
+      if (!userId) {
+        throw new Error('Could not resolve the current user profile id for SOS');
+      }
+
+      const sendSos = async (location: { lat: number; lng: number } | null) => {
+        const response = await fetch(buildNavigationApiUrl('/sos'), {
+          method: 'POST',
+          headers: await getAuthHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            userId,
+            metadata: {
+              source: 'manual',
+              location,
+              route: routeResult?.summary || null,
+              fromLocation,
+              toLocation
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const details = await response.text().catch(() => '');
+          throw new Error(details || `SOS request failed (${response.status})`);
+        }
+
+        return response.json();
+      };
+
+      let location: { lat: number; lng: number } | null = null;
+
+      if (navigator.geolocation) {
+        try {
+          location = await new Promise<{ lat: number; lng: number }>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              (position) => resolve({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              }),
+              reject,
+              { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+            );
+          });
+        } catch (error) {
+          console.warn('SOS location lookup failed, sending alert without location:', error);
+        }
+      }
+
+      const sosResponse = await sendSos(location);
+      const notification = sosResponse?.result?.notification || sosResponse?.notification || null;
+
+      setNeedsManualContactNotify(false);
+      setSosActive(true);
+
       toast({
-        title: 'SOS unavailable',
-        description: 'Geolocation is not supported in this browser.',
+        title: 'Emergency alert sent',
+        description: notification
+          ? `SMS sent to ${notification.smsSent || 0} trusted contact${(notification.smsSent || 0) === 1 ? '' : 's'}.`
+          : 'SOS sent to the backend emergency flow.'
+      });
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'SOS failed',
+        description: 'Unable to send emergency alert right now. Please try again.',
         variant: 'destructive'
       });
+    } finally {
       setIsSosSending(false);
     }
   };
 
   const handleManualTrustedContactNotify = async () => {
-    if (trustedContacts.length === 0) {
-      toast({
-        title: 'No trusted contacts',
-        description: 'Add trusted contacts first to send WhatsApp alerts.',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    // Pre-open WhatsApp windows on user click (has gesture, browsers allow)
-    const preparedPopups = trustedContacts.map((contact) => ({
-      contact,
-      phone: contact.phone.replace(/\D/g, ''),
-      popup: window.open('', '_blank', 'noopener,noreferrer')
-    }));
-
     setIsManualContactNotifyLoading(true);
     try {
-      await triggerTrustedContactsForSos('manual', preparedPopups);
-    } catch (error) {
-      console.error('Failed to notify trusted contacts:', error);
-      preparedPopups.forEach(({ popup }) => {
-        if (popup && !popup.closed) {
-          popup.close();
-        }
-      });
+      await triggerTrustedContactsForSos();
     } finally {
       setIsManualContactNotifyLoading(false);
     }
@@ -933,7 +812,7 @@ const CheckRoute = () => {
                           disabled={isManualContactNotifyLoading}
                           className="bg-red-500 hover:bg-red-600 text-white"
                         >
-                          {isManualContactNotifyLoading ? 'Opening WhatsApp...' : 'Notify Trusted Contacts'}
+                          {isManualContactNotifyLoading ? 'Processing SOS...' : 'Notify Trusted Contacts'}
                         </Button>
                       </div>
                     )}

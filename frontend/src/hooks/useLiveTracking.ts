@@ -510,10 +510,7 @@ export const useLiveTracking = (
         trackingModeRef.current = mode;
         armGpsSignalTimeout();
 
-        // Notify contacts that tracking started
-        if (shouldNotifyContacts && notifyTrustedContacts) {
-            notifyTrustedContacts(`🛡️ I've started a journey on Raksha.\nRoute: ${fromLocation} to ${toLocation}.\nTrack my safety status here: ${window.location.href}`);
-        }
+        // Backend SOS now handles emergency notifications. Keep tracking silent here.
 
         if (navigator.geolocation) {
             const id = navigator.geolocation.watchPosition(
