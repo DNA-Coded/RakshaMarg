@@ -64,9 +64,20 @@ function resolveLatLng(metadata = {}) {
     return { lat, lng };
 }
 
+function resolveLatLngFromUser(user) {
+    const lat = Number(user?.lastKnownLocation?.lat);
+    const lng = Number(user?.lastKnownLocation?.lng);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+    }
+
+    return { lat, lng };
+}
+
 function buildSosMessage({ user, triggeredAt, metadata }) {
     const displayName = user.displayName || user.email || user.phoneNumber || String(user._id);
-    const latLng = resolveLatLng(metadata);
+    const latLng = resolveLatLng(metadata) || resolveLatLngFromUser(user);
     const locationLine = latLng
         ? `Location: https://maps.google.com/?q=${latLng.lat},${latLng.lng}`
         : 'Location: Not available';

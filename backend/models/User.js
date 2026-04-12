@@ -85,6 +85,32 @@ const userSchema = new mongoose.Schema(
                 }
             },
             default: null
+        },
+        lastKnownLocation: {
+            type: {
+                lat: {
+                    type: Number,
+                    default: null
+                },
+                lng: {
+                    type: Number,
+                    default: null
+                },
+                accuracyMeters: {
+                    type: Number,
+                    default: null
+                },
+                source: {
+                    type: String,
+                    default: 'unknown',
+                    trim: true
+                },
+                updatedAt: {
+                    type: Date,
+                    default: null
+                }
+            },
+            default: null
         }
     },
     {

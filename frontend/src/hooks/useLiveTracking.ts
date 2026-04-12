@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-import { buildNavigationApiUrl } from '../config';
+import { API_BASE_URL, buildNavigationApiUrl } from '../config';
 import { getAuthHeaders } from '@/lib/apiHeaders';
 import { toast } from './use-toast';
 import { getWeatherAlerts, WeatherAlert, WeatherSnapshot } from '@/services/navigation';
@@ -14,6 +14,14 @@ const DEVIATION_NOTICE_COOLDOWN_MS = 30000;
 const TRACKING_ERROR_NOTICE_COOLDOWN_MS = 15000;
 const WEATHER_CHECK_MIN_MOVEMENT_METERS = 150;
 const WEATHER_CHECK_MIN_INTERVAL_MS = 60000;
+
+const getUserLocationApiUrl = () => {
+    if (API_BASE_URL) {
+        return `${API_BASE_URL}/api/v1/users/me/location`;
+    }
+
+    return '/api/v1/users/me/location';
+};
 
 type TrackingMode = 'passive' | 'navigation' | 'sos';
 
@@ -593,6 +601,21 @@ export const useLiveTracking = (
                             }
 
                             const data = await response.json().catch(() => ({}));
+
+                            // Persist app location for hardware-triggered SOS fallback.
+                            void fetch(getUserLocationApiUrl(), {
+                                method: 'PATCH',
+                                headers: await getAuthHeaders({
+                                    'Content-Type': 'application/json'
+                                }),
+                                body: JSON.stringify({
+                                    lat: latitude,
+                                    lng: longitude,
+                                    source: 'app-tracking'
+                                })
+                            }).catch((error) => {
+                                console.warn('Failed to sync last known location:', error);
+                            });
 
                             if (!isTrackingActiveRef.current || !isMountedRef.current) {
                                 return;

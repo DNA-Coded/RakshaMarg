@@ -11,6 +11,23 @@ export async function triggerSOS(userId, metadata = {}) {
     const displayName = user.displayName || user.email || user.phoneNumber || String(user._id);
     const triggeredAt = new Date();
 
+    const location = metadata?.location && typeof metadata.location === 'object'
+        ? metadata.location
+        : null;
+
+    const lat = Number(location?.lat ?? metadata?.lat ?? metadata?.currentLat ?? metadata?.latitude);
+    const lng = Number(location?.lng ?? metadata?.lng ?? metadata?.currentLng ?? metadata?.longitude);
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        user.lastKnownLocation = {
+            lat,
+            lng,
+            accuracyMeters: Number(metadata?.accuracyMeters ?? metadata?.accuracy ?? NaN) || null,
+            source: metadata?.source || 'sos',
+            updatedAt: triggeredAt
+        };
+    }
+
     user.lastSosEvent = {
         source: metadata.source || 'unknown',
         deviceId: metadata.deviceId || null,

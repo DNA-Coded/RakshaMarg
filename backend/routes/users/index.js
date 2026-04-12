@@ -12,6 +12,7 @@ function toUserResponse(user) {
         deviceId: user.deviceId || null,
         trustedContacts: user.trustedContacts || [],
         lastSosEvent: user.lastSosEvent || null,
+        lastKnownLocation: user.lastKnownLocation || null,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         lastLoginAt: user.lastLoginAt
@@ -154,6 +155,59 @@ export default async function userRoutes(fastify) {
 
         return {
             contacts: user.trustedContacts || []
+        };
+    });
+
+    fastify.patch('/me/location', {
+        onRequest: [fastify.verifyApiKey, fastify.verifyFirebaseToken],
+        schema: {
+            body: {
+                type: 'object',
+                required: ['lat', 'lng'],
+                additionalProperties: false,
+                properties: {
+                    lat: { type: 'number', minimum: -90, maximum: 90 },
+                    lng: { type: 'number', minimum: -180, maximum: 180 },
+                    accuracyMeters: { type: 'number', minimum: 0 },
+                    source: { type: 'string', minLength: 1, maxLength: 40 }
+                }
+            }
+        }
+    }, async (request, reply) => {
+        const { lat, lng, accuracyMeters, source } = request.body || {};
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return reply.code(400).send({
+                error: 'Bad Request',
+                message: 'Valid lat and lng are required'
+            });
+        }
+
+        const user = await User.findOneAndUpdate(
+            { firebaseUid: request.user.uid },
+            {
+                $set: {
+                    lastKnownLocation: {
+                        lat,
+                        lng,
+                        accuracyMeters: Number.isFinite(accuracyMeters) ? accuracyMeters : null,
+                        source: source || 'app-tracking',
+                        updatedAt: new Date()
+                    }
+                },
+                $setOnInsert: {
+                    role: 'user'
+                }
+            },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true
+            }
+        );
+
+        return {
+            location: user.lastKnownLocation || null
         };
     });
 }
