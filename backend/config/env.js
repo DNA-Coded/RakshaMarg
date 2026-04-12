@@ -77,6 +77,12 @@ export const config = {
         extremeTempHighC: parseNumber(process.env.WEATHER_ALERT_EXTREME_TEMP_HIGH_C, 42),
         extremeTempLowC: parseNumber(process.env.WEATHER_ALERT_EXTREME_TEMP_LOW_C, 5)
     },
+    twilioSosEnabled: (process.env.TWILIO_SOS_ENABLED || 'false').toLowerCase() === 'true',
+    twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+    twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+    twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+    twilioWhatsappFallbackEnabled: (process.env.TWILIO_WHATSAPP_FALLBACK_ENABLED || 'false').toLowerCase() === 'true',
+    twilioWhatsappFrom: process.env.TWILIO_WHATSAPP_FROM,
     rateLimit: {
         max: 100,
         timeWindow: '1 minute'

@@ -18,7 +18,8 @@
     "fastify": "^4.26.1",
     "fastify-plugin": "^4.5.1",
     "firebase-admin": "^12.7.0",
-    "mongoose": "^8.18.0"
+    "mongoose": "^8.18.0",
+    "twilio": "^5.13.1"
   },
   "engines": {
     "node": ">=18"
