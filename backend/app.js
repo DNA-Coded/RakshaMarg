@@ -16,18 +16,16 @@ export async function buildApp() {
     });
 
     let mongoAvailable = false;
-    try {
-        await connectMongoDB();
-        mongoAvailable = true;
-        app.log.info('MongoDB connected');
-    } catch (error) {
-        mongoAvailable = false;
-        if (config.mongodbRequired) {
-            throw error;
-        }
 
-        app.log.warn({ err: error }, 'MongoDB unavailable. Starting in degraded mode (MONGODB_REQUIRED=false).');
-    }
+    // Health Check
+    app.get('/health', async (request, reply) => {
+        const databaseStatus = isMongoConnected() ? 'up' : (mongoAvailable ? 'up' : 'down');
+        return {
+            status: databaseStatus === 'up' ? 'ok' : 'degraded',
+            database: databaseStatus,
+            timestamp: new Date().toISOString()
+        };
+    });
 
     // Global Plugins
     await app.register(cors, {
@@ -40,15 +38,22 @@ export async function buildApp() {
     await app.register(rateLimitPlugin);
     await app.register(authPlugin);
 
-    // Health Check
-    app.get('/health', async (request, reply) => {
-        const databaseStatus = isMongoConnected() ? 'up' : (mongoAvailable ? 'up' : 'down');
-        return {
-            status: databaseStatus === 'up' ? 'ok' : 'degraded',
-            database: databaseStatus,
-            timestamp: new Date().toISOString()
-        };
-    });
+    // Connect MongoDB in the background so the service can still start and report health.
+    connectMongoDB()
+        .then(() => {
+            mongoAvailable = true;
+            app.log.info('MongoDB connected');
+        })
+        .catch((error) => {
+            mongoAvailable = false;
+
+            if (config.mongodbRequired) {
+                app.log.error({ err: error }, 'MongoDB unavailable while MONGODB_REQUIRED=true. Service remains up, but database-backed routes may fail.');
+                return;
+            }
+
+            app.log.warn({ err: error }, 'MongoDB unavailable. Starting in degraded mode (MONGODB_REQUIRED=false).');
+        });
 
     // API Routes
     await app.register(navigationRoutes, { prefix: '/api/v1/navigation' });
