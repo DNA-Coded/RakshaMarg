@@ -75,11 +75,22 @@ function resolveLatLngFromUser(user) {
     return { lat, lng };
 }
 
+function buildGoogleMapsLocationUrl(lat, lng) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return null;
+    }
+
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+}
+
 function buildSosMessage({ user, triggeredAt, metadata }) {
     const displayName = user.displayName || user.email || user.phoneNumber || String(user._id);
     const latLng = resolveLatLng(metadata) || resolveLatLngFromUser(user);
-    const locationLine = latLng
-        ? `Location: https://maps.google.com/?q=${latLng.lat},${latLng.lng}`
+    const locationUrl = typeof metadata?.locationUrl === 'string' && metadata.locationUrl.trim()
+        ? metadata.locationUrl.trim()
+        : buildGoogleMapsLocationUrl(latLng?.lat, latLng?.lng);
+    const locationLine = locationUrl
+        ? `Location: ${locationUrl}`
         : 'Location: Not available';
 
     return [

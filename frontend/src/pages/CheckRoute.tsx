@@ -412,6 +412,9 @@ const CheckRoute = () => {
     });
   };
 
+  const buildGoogleMapsLocationUrl = (location: { lat: number; lng: number }) =>
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${location.lat},${location.lng}`)}`;
+
   const notifyTrustedContacts = () => ({ total: trustedContacts.length, opened: 0, blocked: 0 });
 
   const triggerTrustedContactsForSos = async () => {
@@ -662,6 +665,7 @@ const CheckRoute = () => {
             metadata: {
               source: 'manual',
               location,
+              locationUrl: location ? buildGoogleMapsLocationUrl(location) : null,
               route: routeResult?.summary || null,
               fromLocation,
               toLocation
@@ -677,7 +681,8 @@ const CheckRoute = () => {
         return response.json();
       };
 
-      let location: { lat: number; lng: number } | null = null;
+      const fallbackLocation = userLiveLocation || initialCoordinates || null;
+      let location: { lat: number; lng: number } | null = fallbackLocation;
 
       if (navigator.geolocation) {
         try {
@@ -692,8 +697,12 @@ const CheckRoute = () => {
             );
           });
         } catch (error) {
-          console.warn('SOS location lookup failed, sending alert without location:', error);
+          console.warn('SOS location lookup failed, falling back to the last known app location:', error);
         }
+      }
+
+      if (!location) {
+        location = fallbackLocation;
       }
 
       const sosResponse = await sendSos(location);
