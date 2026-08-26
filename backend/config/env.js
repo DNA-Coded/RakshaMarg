@@ -80,6 +80,7 @@ export const config = {
     twilioSosEnabled: (process.env.TWILIO_SOS_ENABLED || 'false').toLowerCase() === 'true',
     twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
     twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+    twilioPhoneNumber: process.env.TWILIO_PHONE_NUMBER,
     twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
     twilioWhatsappFallbackEnabled: (process.env.TWILIO_WHATSAPP_FALLBACK_ENABLED || 'false').toLowerCase() === 'true',
     twilioWhatsappFrom: process.env.TWILIO_WHATSAPP_FROM,

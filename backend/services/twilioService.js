@@ -103,11 +103,18 @@ function buildSosMessage({ user, triggeredAt, metadata }) {
 }
 
 async function sendSmsMessage({ client, to, body }) {
-    return client.messages.create({
+    const payload = {
         to,
-        body,
-        messagingServiceSid: config.twilioMessagingServiceSid
-    });
+        body
+    };
+
+    if (config.twilioMessagingServiceSid) {
+        payload.messagingServiceSid = config.twilioMessagingServiceSid;
+    } else if (config.twilioPhoneNumber) {
+        payload.from = config.twilioPhoneNumber;
+    }
+
+    return client.messages.create(payload);
 }
 
 async function sendWhatsappFallback({ client, to, body }) {
@@ -146,10 +153,11 @@ export async function sendSosNotifications({ user, metadata = {}, triggeredAt = 
         };
     }
 
-    if (!client || !config.twilioMessagingServiceSid) {
+    const hasSender = Boolean(config.twilioMessagingServiceSid || config.twilioPhoneNumber);
+    if (!client || !hasSender) {
         return {
             enabled: false,
-            reason: 'Missing Twilio credentials or Messaging Service SID',
+            reason: 'Missing Twilio credentials or sender (TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID)',
             message: null,
             attempted: 0,
             smsSent: 0,
