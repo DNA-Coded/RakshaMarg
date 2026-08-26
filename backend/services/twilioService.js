@@ -144,6 +144,9 @@ async function sendWhatsappFallback({ client, to, body }) {
 }
 
 export async function sendSosNotifications({ user, metadata = {}, triggeredAt = new Date() }) {
+    console.log('[SOS-DEBUG] User trustedContacts from DB:', JSON.stringify(user.trustedContacts));
+    console.log('[SOS-DEBUG] User ID:', String(user._id), '| Contact count:', (user.trustedContacts || []).length);
+
     const notificationsEnabled = config.twilioSosEnabled;
     const client = getTwilioClient();
 

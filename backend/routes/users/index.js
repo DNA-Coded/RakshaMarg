@@ -139,6 +139,8 @@ export default async function userRoutes(fastify) {
             phone: String(contact.phone).trim()
         }));
 
+        console.log('[CONTACTS-DEBUG] PUT /me/trusted-contacts called. UID:', request.user.uid, '| Contacts:', JSON.stringify(normalizedContacts));
+
         const user = await User.findOneAndUpdate(
             { firebaseUid: request.user.uid },
             {
