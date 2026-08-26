@@ -211,6 +211,7 @@ export async function sendSosNotifications({ user, metadata = {}, triggeredAt = 
             });
             continue;
         } catch (smsError) {
+            console.error(`[SOS] SMS failed for ${contact.phone}:`, smsError.message, smsError.code);
             try {
                 const wa = await sendWhatsappFallback({
                     client,
@@ -231,6 +232,7 @@ export async function sendSosNotifications({ user, metadata = {}, triggeredAt = 
                     continue;
                 }
             } catch (waError) {
+                console.error(`[SOS] WhatsApp fallback failed for ${contact.phone}:`, waError.message);
                 results.push({
                     name: contact.name,
                     phone: contact.phone,
