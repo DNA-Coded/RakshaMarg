@@ -30,7 +30,7 @@ export async function buildApp() {
     // Global Plugins
     await app.register(cors, {
         origin: config.corsOrigin,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key', 'x-device-key']
     });
 
