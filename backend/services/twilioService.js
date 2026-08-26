@@ -114,7 +114,14 @@ async function sendSmsMessage({ client, to, body }) {
         payload.from = config.twilioPhoneNumber;
     }
 
-    return client.messages.create(payload);
+    try {
+        const message = await client.messages.create(payload);
+        console.log(`[Twilio] SMS successfully created. SID: ${message.sid}, To: ${to}`);
+        return message;
+    } catch (err) {
+        console.error(`[Twilio] Failed to send SMS to ${to}:`, err.message, err.code);
+        throw err;
+    }
 }
 
 async function sendWhatsappFallback({ client, to, body }) {
