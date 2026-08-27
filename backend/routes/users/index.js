@@ -63,17 +63,19 @@ export default async function userRoutes(fastify) {
                 properties: {
                     displayName: { type: 'string', minLength: 1, maxLength: 100 },
                     phoneNumber: { type: 'string', minLength: 5, maxLength: 30 },
-                    photoURL: { type: 'string', minLength: 1, maxLength: 500 }
+                    photoURL: { type: 'string', minLength: 1, maxLength: 500 },
+                    deviceId: { type: 'string', minLength: 1, maxLength: 100 }
                 }
             }
         }
     }, async (request, reply) => {
         const allowedUpdates = {};
-        const { displayName, phoneNumber, photoURL } = request.body || {};
+        const { displayName, phoneNumber, photoURL, deviceId } = request.body || {};
 
         if (displayName !== undefined) allowedUpdates.displayName = displayName;
         if (phoneNumber !== undefined) allowedUpdates.phoneNumber = phoneNumber;
         if (photoURL !== undefined) allowedUpdates.photoURL = photoURL;
+        if (deviceId !== undefined) allowedUpdates.deviceId = deviceId;
 
         if (Object.keys(allowedUpdates).length === 0) {
             return reply.code(400).send({
